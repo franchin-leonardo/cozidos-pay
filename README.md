@@ -1,32 +1,71 @@
-# React + TypeScript + Vite
+# Cozidos Pay
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Aplicacao React + TypeScript + Vite para gerenciamento de movimentacoes e despesas, com autenticacao e persistencia em Supabase.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 20+
+- npm 10+
 
-## React Compiler
+## Rodar Localmente
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Instale dependencias:
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+2. Crie o arquivo `.env.local` (ou copie de `.env.example`) com:
+
+```env
+VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=SUA_ANON_KEY
+```
+
+3. Inicie o projeto:
+
+```bash
+npm run dev
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+Saida de producao: `dist/`
+
+## Deploy na Vercel
+
+### Opcao A: Via Dashboard (recomendado)
+
+1. Acesse [Vercel](https://vercel.com/new)
+2. Importe o repositorio `franchin-leonardo/cozidos-pay`
+3. Em Build and Output Settings, mantenha:
+   - Framework Preset: `Vite`
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+4. Em Environment Variables, adicione:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+5. Clique em Deploy
+
+### Opcao B: Via CLI
+
+```bash
+npm i -g vercel
+vercel login
+vercel
+```
+
+No primeiro deploy, informe as variaveis de ambiente no painel do projeto na Vercel.
+
+## Variaveis de Ambiente na Vercel
+
+Defina as variaveis para os ambientes `Production`, `Preview` e `Development`:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Sem essas variaveis, o app sobe mas nao consegue autenticar nem carregar dados do Supabase.
