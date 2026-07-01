@@ -20,6 +20,8 @@ import {
 import './App.css'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { UserMenu } from './components/UserMenu'
+import { useMovements } from './hooks/useMovements'
+import { useExpenses } from './hooks/useExpenses'
 
 type MovementType = 'entrada' | 'saida'
 
@@ -138,8 +140,21 @@ function parseCurrencyInput(value: string) {
 }
 
 function App() {
-  const [movements, setMovements] = useState(initialMovements)
-  const [expenses, setExpenses] = useState(initialExpenses)
+  // Hooks do Supabase para gerenciar dados em tempo real
+  const {
+    movements,
+    addNewMovement,
+  } = useMovements(initialMovements)
+  const {
+    expenses,
+    addNewExpense: addNewExpenseToSupabase,
+    updateExpenseName: updateExpenseNameSupabase,
+    removeExpense: removeExpenseFromSupabase,
+    assignMovementToExpense,
+    removeMovementFromExpense,
+  } = useExpenses(initialExpenses)
+
+  // Estados locais da UI
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState<MovementType | 'todos'>('todos')
   const [startDate, setStartDate] = useState('')
@@ -219,7 +234,7 @@ function App() {
       time: getCurrentTime(),
     }
 
-    setMovements((currentMovements) => [movement, ...currentMovements])
+    addNewMovement(movement)
     setLatestNotification(movement)
   }
 
@@ -231,47 +246,9 @@ function App() {
       return
     }
 
-    setExpenses((currentExpenses) => [
-      {
-        id: `expense-${Date.now()}`,
-        name: expenseName.trim(),
-        targetAmount,
-        movementIds: [],
-      },
-      ...currentExpenses,
-    ])
+    addNewExpenseToSupabase(expenseName.trim(), targetAmount)
     setExpenseName('')
     setExpenseAmount('')
-  }
-
-  function assignMovementToExpense(expenseId: string, movementId: string) {
-    setExpenses((currentExpenses) =>
-      currentExpenses.map((expense) => {
-        const movementIds =
-          expense.id === expenseId
-            ? Array.from(new Set([...expense.movementIds, movementId]))
-            : expense.movementIds.filter(
-                (assignedMovementId) => assignedMovementId !== movementId,
-              )
-
-        return { ...expense, movementIds }
-      }),
-    )
-  }
-
-  function removeMovementFromExpense(expenseId: string, movementId: string) {
-    setExpenses((currentExpenses) =>
-      currentExpenses.map((expense) =>
-        expense.id === expenseId
-          ? {
-              ...expense,
-              movementIds: expense.movementIds.filter(
-                (assignedMovementId) => assignedMovementId !== movementId,
-              ),
-            }
-          : expense,
-      ),
-    )
   }
 
   function addSelectedMovementToExpense(expenseId: string) {
@@ -309,24 +286,12 @@ function App() {
       return
     }
 
-    setExpenses((currentExpenses) =>
-      currentExpenses.map((expense) =>
-        expense.id === expenseId
-          ? {
-              ...expense,
-              name: editingExpenseName.trim(),
-              targetAmount,
-            }
-          : expense,
-      ),
-    )
+    updateExpenseNameSupabase(expenseId, editingExpenseName.trim(), targetAmount)
     cancelEditingExpense()
   }
 
   function deleteExpense(expenseId: string) {
-    setExpenses((currentExpenses) =>
-      currentExpenses.filter((expense) => expense.id !== expenseId),
-    )
+    removeExpenseFromSupabase(expenseId)
     setSelectedMovementByExpenseId((currentSelection) => {
       const { [expenseId]: _removedSelection, ...nextSelection } = currentSelection
       return nextSelection
