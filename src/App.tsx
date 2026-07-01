@@ -18,6 +18,8 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { UserMenu } from './components/UserMenu'
 
 type MovementType = 'entrada' | 'saida'
 
@@ -389,18 +391,22 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <span className="eyebrow">Cozidos Pay</span>
-          <h1>Movimentações da conta</h1>
-          <p>Entradas, saídas e avisos em tempo real em uma visão simples.</p>
-        </div>
-        <button className="primary-action" type="button" onClick={simulateMovement}>
-          <BellRing size={18} aria-hidden="true" />
-          Simular notificação
-        </button>
-      </header>
+    <ProtectedRoute>
+      <main className="app-shell">
+        <header className="app-header">
+          <div>
+            <span className="eyebrow">Cozidos Pay</span>
+            <h1>Movimentações da conta</h1>
+            <p>Entradas, saídas e avisos em tempo real em uma visão simples.</p>
+          </div>
+          <div className="header-actions">
+            <button className="primary-action" type="button" onClick={simulateMovement}>
+              <BellRing size={18} aria-hidden="true" />
+              Simular notificação
+            </button>
+            <UserMenu />
+          </div>
+        </header>
 
       <section className="notification-strip" aria-live="polite">
         <div className="notification-icon">
@@ -752,7 +758,8 @@ function App() {
           </div>
         </section>
       </section>
-    </main>
+      </main>
+    </ProtectedRoute>
   )
 }
 
