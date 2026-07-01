@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800;900&display=swap');
+
+:root {
+  --bg: #f7faf8;
+  --border: #e4ece6;
+  --green-soft: #eefbf2;
+  --green-button: #b8efc7;
+  --green-border: #bfeccb;
+  --green-strong: #1c7e4e;
+  --text: #3f4a46;
+  --text-muted: #748079;
+  --text-strong: #15201b;
+  --shadow-soft: 0 18px 50px rgba(24, 61, 42, 0.07);
+
+  font: 16px/1.5 'Manrope', 'Trebuchet MS', sans-serif;
+  color: var(--text);
+  background:
+    linear-gradient(135deg, rgba(184, 239, 199, 0.28), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, var(--bg) 62%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100svh;
+  margin: 0;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1,
+h2 {
+  color: var(--text-strong);
+}
+
+h1 {
+  max-width: 780px;
+  font-size: 52px;
+  line-height: 1.02;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  h1 {
+    font-size: 40px;
+  }
+}
+
+@media (max-width: 520px) {
+  h1 {
+    font-size: 34px;
+  }
+}
+
+h2 {
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 900;
+}
