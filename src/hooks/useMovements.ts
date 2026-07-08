@@ -21,18 +21,16 @@ export function useMovements(initialData: Movement[]) {
       try {
         setLoading(true)
         const data = await getMovements()
-        if (data && data.length > 0) {
-          // Mapear dados do Supabase para o formato esperado
-          const mapped = data.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            amount: Number(m.amount),
-            type: m.type as 'entrada' | 'saida',
-            date: m.date,
-            time: m.time,
-          }))
-          setMovements(mapped)
-        }
+        // Reflete exatamente o banco: se vier vazio, limpa lista local.
+        const mapped = (data || []).map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          amount: Number(m.amount),
+          type: m.type as 'entrada' | 'saida',
+          date: m.date,
+          time: m.time,
+        }))
+        setMovements(mapped)
         setError(null)
       } catch (err) {
         console.error('Erro ao carregar movimentações:', err)

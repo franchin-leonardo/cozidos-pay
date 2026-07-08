@@ -68,4 +68,73 @@ Defina as variaveis para os ambientes `Production`, `Preview` e `Development`:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
+Opcional para webhook PagBank:
+
+- `PAGBANK_WEBHOOK_TOKEN`
+
+Opcional para EDI PagBank (Consultar movimentos):
+
+- `PAGBANK_EDI_USER` (numero do estabelecimento)
+- `PAGBANK_EDI_TOKEN` (token especifico da API EDI)
+- `PAGBANK_EDI_AUTH_MODE` (`basic` padrao; use `headers` se seu contrato exigir)
+
 Sem essas variaveis, o app sobe mas nao consegue autenticar nem carregar dados do Supabase.
+
+## Webhook PagBank (Notificacoes)
+
+Foi adicionado um endpoint para receber notificacoes de mudanca de status:
+
+- URL: `/api/pagbank/webhook`
+- Metodo: `POST`
+
+### Configurar no PagBank
+
+Cadastre no painel/documentacao do PagBank a URL publica do projeto, por exemplo:
+
+`https://seu-dominio.com/api/pagbank/webhook`
+
+Se quiser proteger com token (recomendado), defina `PAGBANK_WEBHOOK_TOKEN` e cadastre:
+
+`https://seu-dominio.com/api/pagbank/webhook?token=SEU_TOKEN`
+
+### Comportamento atual
+
+- Retorna `200 {"ok": true}` quando recebe notificacao valida.
+- Registra o payload no log da funcao para auditoria inicial.
+- Retorna `401` se token esperado estiver configurado e nao for enviado/corresponder.
+- Retorna `405` para metodos diferentes de `POST`.
+
+### Teste rapido
+
+```bash
+curl -X POST "https://seu-dominio.com/api/pagbank/webhook?token=SEU_TOKEN" \
+   -H "Content-Type: application/json" \
+   -d '{"event":"TRANSACTION_STATUS_CHANGED","transactionCode":"A87..."}'
+```
+
+## PagBank EDI - Consultar Movimentos
+
+Foi adicionado um endpoint proxy para consulta de movimentos EDI:
+
+- URL: `/api/pagbank/movements`
+- Metodo: `GET`
+
+Query params suportados:
+
+- `dateMovement` (YYYY-MM-DD)
+- `pageNumber` (padrao 1)
+- `pageSize` (padrao 1000)
+- `typeMotion` (`1` transacional, `2` financeiro, `3` antecipacao)
+- `ediVersion` (padrao `2.01`)
+
+Exemplo:
+
+```bash
+curl "http://localhost:5173/api/pagbank/movements?dateMovement=2026-07-06&typeMotion=1&pageNumber=1&pageSize=200"
+```
+
+Observacoes importantes da doc:
+
+- EDI nao possui sandbox.
+- O token EDI e diferente do token padrao da conta/API.
+- A API pode retornar cabecalho `VALIDADO` para indicar completude dos dados.

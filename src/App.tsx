@@ -159,8 +159,12 @@ function App() {
   const [typeFilter, setTypeFilter] = useState<MovementType | 'todos'>('todos')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [manualMovementName, setManualMovementName] = useState('')
+  const [manualMovementAmount, setManualMovementAmount] = useState('')
+  const [manualMovementType, setManualMovementType] = useState<MovementType>('entrada')
   const [expenseName, setExpenseName] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseTab, setExpenseTab] = useState<'em_andamento' | 'concluidas'>('em_andamento')
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null)
   const [editingExpenseName, setEditingExpenseName] = useState('')
   const [editingExpenseAmount, setEditingExpenseAmount] = useState('')
@@ -183,6 +187,12 @@ function App() {
 
     return matchesName && matchesType && matchesStartDate && matchesEndDate
   })
+
+  const statementBalance = filteredMovements.reduce((total, movement) => {
+    return movement.type === 'entrada'
+      ? total + movement.amount
+      : total - movement.amount
+  }, 0)
 
   const totals = movements.reduce(
     (summary, movement) => {
@@ -225,17 +235,49 @@ function App() {
     }
   })
 
+  const visibleExpenses = expensesWithProgress.filter((expense) =>
+    expenseTab === 'concluidas' ? expense.isCompleted : !expense.isCompleted,
+  )
+
   function simulateMovement() {
     const template = movementTemplates[movements.length % movementTemplates.length]
-    const movement: Movement = {
+    const movement: Omit<Movement, 'id'> = {
       ...template,
-      id: `mov-${Date.now()}`,
       date: getToday(),
       time: getCurrentTime(),
     }
 
     addNewMovement(movement)
-    setLatestNotification(movement)
+    setLatestNotification({
+      ...movement,
+      id: `mov-${Date.now()}`,
+    })
+  }
+
+  function addManualMovement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const amount = parseCurrencyInput(manualMovementAmount)
+    if (!manualMovementName.trim() || Number.isNaN(amount) || amount <= 0) {
+      return
+    }
+
+    const movement: Omit<Movement, 'id'> = {
+      name: manualMovementName.trim(),
+      amount,
+      type: manualMovementType,
+      date: getToday(),
+      time: getCurrentTime(),
+    }
+
+    addNewMovement(movement)
+    setLatestNotification({
+      ...movement,
+      id: `manual-${Date.now()}`,
+    })
+    setManualMovementName('')
+    setManualMovementAmount('')
+    setManualMovementType('entrada')
   }
 
   function addExpense(event: FormEvent<HTMLFormElement>) {
@@ -252,6 +294,11 @@ function App() {
   }
 
   function addSelectedMovementToExpense(expenseId: string) {
+    const expense = expensesWithProgress.find((item) => item.id === expenseId)
+    if (!expense || expense.isCompleted) {
+      return
+    }
+
     const movementId = selectedMovementByExpenseId[expenseId]
     if (!movementId) {
       return
@@ -345,6 +392,13 @@ function App() {
     event.preventDefault()
     event.stopPropagation()
 
+    const expense = expensesWithProgress.find((item) => item.id === expenseId)
+    if (!expense || expense.isCompleted) {
+      setDraggedMovementId(null)
+      setDragOverExpenseId(null)
+      return
+    }
+
     const movementId = event.dataTransfer.getData('text/plain') || draggedMovementId
     if (!movementId) {
       return
@@ -407,6 +461,26 @@ function App() {
             <span className="section-kicker">Planejamento</span>
             <h2>Despesas</h2>
             <p>Cadastre uma despesa, arraste movimentações ou adicione pela lista.</p>
+            <div className="expense-tabs" role="tablist" aria-label="Filtrar despesas">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={expenseTab === 'em_andamento'}
+                className={expenseTab === 'em_andamento' ? 'active' : ''}
+                onClick={() => setExpenseTab('em_andamento')}
+              >
+                Em andamento
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={expenseTab === 'concluidas'}
+                className={expenseTab === 'concluidas' ? 'active' : ''}
+                onClick={() => setExpenseTab('concluidas')}
+              >
+                Concluídas
+              </button>
+            </div>
           </div>
 
           <form className="expense-form" onSubmit={addExpense}>
@@ -437,18 +511,34 @@ function App() {
         </div>
 
         <div className="expense-list">
-          {expensesWithProgress.map((expense) => (
+          {visibleExpenses.map((expense) => (
             <article
               className={`expense-card ${expense.isCompleted ? 'completed' : ''} ${
-                draggedMovementId ? 'drop-ready' : ''
+                draggedMovementId && !expense.isCompleted ? 'drop-ready' : ''
               } ${dragOverExpenseId === expense.id ? 'drop-active' : ''}`}
               key={expense.id}
-              onDragEnter={(event) => handleExpenseDragEnter(event, expense.id)}
-              onDragLeave={(event) => handleExpenseDragLeave(event, expense.id)}
-              onDragOver={handleExpenseDragOver}
-              onDragOverCapture={handleExpenseDragOver}
-              onDrop={(event) => handleExpenseDrop(event, expense.id)}
-              onDropCapture={(event) => handleExpenseDrop(event, expense.id)}
+              onDragEnter={
+                expense.isCompleted
+                  ? undefined
+                  : (event) => handleExpenseDragEnter(event, expense.id)
+              }
+              onDragLeave={
+                expense.isCompleted
+                  ? undefined
+                  : (event) => handleExpenseDragLeave(event, expense.id)
+              }
+              onDragOver={expense.isCompleted ? undefined : handleExpenseDragOver}
+              onDragOverCapture={expense.isCompleted ? undefined : handleExpenseDragOver}
+              onDrop={
+                expense.isCompleted
+                  ? undefined
+                  : (event) => handleExpenseDrop(event, expense.id)
+              }
+              onDropCapture={
+                expense.isCompleted
+                  ? undefined
+                  : (event) => handleExpenseDrop(event, expense.id)
+              }
             >
               <div className="expense-top">
                 <div className="expense-icon">
@@ -534,6 +624,7 @@ function App() {
                 <select
                   aria-label={`Movimentação para adicionar em ${expense.name}`}
                   value={selectedMovementByExpenseId[expense.id] ?? ''}
+                  disabled={expense.isCompleted}
                   onChange={(event) =>
                     setSelectedMovementByExpenseId((currentSelection) => ({
                       ...currentSelection,
@@ -559,6 +650,7 @@ function App() {
                   className="icon-action add-movement"
                   type="button"
                   aria-label={`Adicionar movimentação em ${expense.name}`}
+                  disabled={expense.isCompleted}
                   onClick={() => addSelectedMovementToExpense(expense.id)}
                 >
                   <Link2 size={17} aria-hidden="true" />
@@ -588,6 +680,17 @@ function App() {
               </div>
             </article>
           ))}
+
+          {visibleExpenses.length === 0 && (
+            <div className="empty-state">
+              <Wallet size={24} aria-hidden="true" />
+              <strong>
+                {expenseTab === 'concluidas'
+                  ? 'Nenhuma despesa concluída'
+                  : 'Nenhuma despesa em andamento'}
+              </strong>
+            </div>
+          )}
         </div>
       </section>
 
@@ -667,12 +770,58 @@ function App() {
             <div>
               <h2>Extrato</h2>
               <p>{filteredMovements.length} movimentações encontradas</p>
+              <strong
+                className={`statement-balance ${
+                  statementBalance >= 0 ? 'entrada' : 'saida'
+                }`}
+              >
+                Saldo do extrato: {currencyFormatter.format(statementBalance)}
+              </strong>
             </div>
             <button className="ghost-action" type="button">
               <Download size={17} aria-hidden="true" />
               Exportar
             </button>
           </div>
+
+          <form className="movement-form" onSubmit={addManualMovement}>
+            <label className="compact-field">
+              <span>Descrição</span>
+              <input
+                aria-label="Descrição da movimentação"
+                placeholder="Ex.: Pix cliente"
+                value={manualMovementName}
+                onChange={(event) => setManualMovementName(event.target.value)}
+              />
+            </label>
+            <label className="compact-field">
+              <span>Valor</span>
+              <input
+                aria-label="Valor da movimentação"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={manualMovementAmount}
+                onChange={(event) => setManualMovementAmount(event.target.value)}
+              />
+            </label>
+            <label className="compact-field">
+              <span>Tipo</span>
+              <select
+                aria-label="Tipo da movimentação"
+                value={manualMovementType}
+                onChange={(event) =>
+                  setManualMovementType(event.target.value as MovementType)
+                }
+              >
+                <option value="entrada">Entrada</option>
+                <option value="saida">Saída</option>
+              </select>
+            </label>
+            <button className="primary-action" type="submit">
+              <Plus size={18} aria-hidden="true" />
+              Adicionar
+            </button>
+          </form>
 
           <div className="movement-list">
             {filteredMovements.map((movement) => {

@@ -36,29 +36,27 @@ export function useExpenses(initialData: Expense[]) {
       try {
         setLoading(true)
         const data = await getExpenses()
-        if (data && data.length > 0) {
-          // Mapear dados do Supabase para o formato esperado
-          const expensesList = (data as ExpenseDB[]).map((e) => ({
-            id: e.id,
-            name: e.name,
-            targetAmount: Number(e.target_amount),
-            status: e.status,
-            movementIds: [] as string[],
-          }))
+        // Reflete exatamente o banco: se vier vazio, limpa listas locais.
+        const expensesList = (data as ExpenseDB[] || []).map((e) => ({
+          id: e.id,
+          name: e.name,
+          targetAmount: Number(e.target_amount),
+          status: e.status,
+          movementIds: [] as string[],
+        }))
 
-          // Carregar alocações para cada despesa
-          const allAllocations: Record<string, string[]> = {}
-          for (const expense of expensesList) {
-            const expenseAllocations = await getAllocations(expense.id)
-            allAllocations[expense.id] = expenseAllocations.map(
-              (a: any) => a.movement_id,
-            )
-            expense.movementIds = allAllocations[expense.id]
-          }
-
-          setAllocations(allAllocations)
-          setExpenses(expensesList)
+        // Carregar alocações para cada despesa
+        const allAllocations: Record<string, string[]> = {}
+        for (const expense of expensesList) {
+          const expenseAllocations = await getAllocations(expense.id)
+          allAllocations[expense.id] = expenseAllocations.map(
+            (a: any) => a.movement_id,
+          )
+          expense.movementIds = allAllocations[expense.id]
         }
+
+        setAllocations(allAllocations)
+        setExpenses(expensesList)
         setError(null)
       } catch (err) {
         console.error('Erro ao carregar despesas:', err)
