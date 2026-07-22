@@ -12,6 +12,8 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Download,
   GripVertical,
   Link2,
@@ -27,6 +29,7 @@ import {
 import './App.css'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { UserMenu } from './components/UserMenu'
+import { useAuthContext } from './contexts/useAuthContext'
 import { useMovements } from './hooks/useMovements'
 import { useExpenses } from './hooks/useExpenses'
 import {
@@ -34,6 +37,7 @@ import {
   deleteCounterpartyEvent,
   getCounterpartyEvents,
 } from './lib/supabaseService'
+import logo from './assets/logo.png'
 
 type MovementType = 'entrada' | 'saida'
 
@@ -144,8 +148,22 @@ function parseCurrencyInput(value: string) {
   return Number(value.replace(/\./g, '').replace(',', '.'))
 }
 
+function getCurrentLocalDateTime() {
+  const now = new Date()
+  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate(),
+  ).padStart(2, '0')}`
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(
+    2,
+    '0',
+  )}`
+
+  return { date, time }
+}
+
 function App() {
-  const { movements, reloadMovements } = useMovements(initialMovements)
+  const { isGuest, isAdmin } = useAuthContext()
+  const { movements, reloadMovements, addNewMovement } = useMovements(initialMovements)
   const {
     expenses,
     addNewExpense: addNewExpenseToSupabase,
@@ -159,16 +177,20 @@ function App() {
   const [typeFilter, setTypeFilter] = useState<MovementType | 'todos'>('todos')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [manualMovementName, setManualMovementName] = useState('')
+  const [manualMovementAmount, setManualMovementAmount] = useState('')
+  const [manualMovementType, setManualMovementType] = useState<MovementType>('saida')
+  const [isAddingManualMovement, setIsAddingManualMovement] = useState(false)
+  const [manualMovementMessage, setManualMovementMessage] = useState('')
 
   const [planningView, setPlanningView] = useState<
     'planejamento' | 'devedores_credores'
   >('planejamento')
+  const [isPlanningCollapsed, setIsPlanningCollapsed] = useState(false)
+  const [isStatementCollapsed, setIsStatementCollapsed] = useState(false)
 
   const [expenseName, setExpenseName] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
-  const [expenseTab, setExpenseTab] = useState<'em_andamento' | 'concluidas'>(
-    'em_andamento',
-  )
 
   const [counterpartyName, setCounterpartyName] = useState('')
   const [counterpartyDescription, setCounterpartyDescription] = useState('')
@@ -241,9 +263,7 @@ function App() {
     }
   })
 
-  const visibleExpenses = expensesWithProgress.filter((expense) =>
-    expenseTab === 'concluidas' ? expense.isCompleted : !expense.isCompleted,
-  )
+  const visibleExpenses = expensesWithProgress
 
   useEffect(() => {
     let isMounted = true
@@ -274,6 +294,10 @@ function App() {
   function addExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
+    if (isGuest) {
+      return
+    }
+
     const targetAmount = parseCurrencyInput(expenseAmount)
     if (!expenseName.trim() || Number.isNaN(targetAmount) || targetAmount <= 0) {
       return
@@ -286,6 +310,10 @@ function App() {
 
   async function addCounterpartyEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
+    if (isGuest) {
+      return
+    }
 
     const amount = parseCurrencyInput(counterpartyAmount)
     if (
@@ -324,6 +352,10 @@ function App() {
   }
 
   async function removeCounterpartyEntry(entryId: string) {
+    if (isGuest) {
+      return
+    }
+
     const success = await deleteCounterpartyEvent(entryId)
     if (!success) {
       return
@@ -334,7 +366,52 @@ function App() {
     )
   }
 
+  async function addManualMovement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!isAdmin || isAddingManualMovement) {
+      return
+    }
+
+    const parsedAmount = parseCurrencyInput(manualMovementAmount)
+    if (!manualMovementName.trim() || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      setManualMovementMessage('Preencha descrição e valor válido.')
+      return
+    }
+
+    setIsAddingManualMovement(true)
+    setManualMovementMessage('')
+
+    try {
+      const { date, time } = getCurrentLocalDateTime()
+      await addNewMovement({
+        name: manualMovementName.trim(),
+        amount: parsedAmount,
+        type: manualMovementType,
+        date,
+        time,
+      })
+
+      setManualMovementName('')
+      setManualMovementAmount('')
+      setManualMovementType('saida')
+      setManualMovementMessage('Movimentação em dinheiro cadastrada com sucesso.')
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível salvar a movimentação manual.'
+      setManualMovementMessage(`Falha ao salvar: ${message}`)
+    } finally {
+      setIsAddingManualMovement(false)
+    }
+  }
+
   function addSelectedMovementToExpense(expenseId: string) {
+    if (isGuest) {
+      return
+    }
+
     const expense = expensesWithProgress.find((item) => item.id === expenseId)
     if (!expense || expense.isCompleted) {
       return
@@ -353,6 +430,10 @@ function App() {
   }
 
   function startEditingExpense(expense: Expense) {
+    if (isGuest) {
+      return
+    }
+
     setEditingExpenseId(expense.id)
     setEditingExpenseName(expense.name)
     setEditingExpenseAmount(String(expense.targetAmount).replace('.', ','))
@@ -365,6 +446,10 @@ function App() {
   }
 
   function saveExpenseEdit(expenseId: string) {
+    if (isGuest) {
+      return
+    }
+
     const targetAmount = parseCurrencyInput(editingExpenseAmount)
     if (!editingExpenseName.trim() || Number.isNaN(targetAmount) || targetAmount <= 0) {
       return
@@ -375,6 +460,10 @@ function App() {
   }
 
   function deleteExpense(expenseId: string) {
+    if (isGuest) {
+      return
+    }
+
     removeExpenseFromSupabase(expenseId)
     setSelectedMovementByExpenseId((currentSelection) => {
       const { [expenseId]: _removedSelection, ...nextSelection } = currentSelection
@@ -387,6 +476,10 @@ function App() {
   }
 
   function handleMovementDragStart(event: DragEvent<HTMLElement>, movementId: string) {
+    if (isGuest) {
+      return
+    }
+
     event.dataTransfer.setData('text/plain', movementId)
     event.dataTransfer.effectAllowed = 'move'
     setDraggedMovementId(movementId)
@@ -414,6 +507,10 @@ function App() {
   }
 
   function handleExpenseDrop(event: DragEvent<HTMLElement>, expenseId: string) {
+    if (isGuest) {
+      return
+    }
+
     event.preventDefault()
     event.stopPropagation()
 
@@ -436,6 +533,16 @@ function App() {
 
   const runPixImport = useCallback(
     async (source: 'auto' | 'manual') => {
+      if (isGuest) {
+        setImportStatusMessage('Modo visitante: apenas leitura.')
+        return
+      }
+
+      if (source === 'manual' && !isAdmin) {
+        setImportStatusMessage('Ação disponível apenas para administradores.')
+        return
+      }
+
       if (isImportingMovements) {
         return
       }
@@ -492,7 +599,7 @@ function App() {
         setIsImportingMovements(false)
       }
     },
-    [isImportingMovements, reloadMovements],
+    [isAdmin, isGuest, isImportingMovements, reloadMovements],
   )
 
   useEffect(() => {
@@ -501,15 +608,24 @@ function App() {
     }
 
     hasTriggeredAutoImport.current = true
-    void runPixImport('auto')
-  }, [runPixImport])
+    if (!isGuest) {
+      void runPixImport('auto')
+    }
+  }, [isGuest, runPixImport])
 
   return (
     <ProtectedRoute>
       <main className="app-shell">
         <header className="app-header">
           <div>
-            <span className="eyebrow">Cozidos Pay</span>
+            <div className="brand-row">
+              <img
+                className="brand-logo"
+                src={logo}
+                alt="Logo Cozidos F.C"
+              />
+              <span className="eyebrow">Cozidos Pay</span>
+            </div>
             <h1>Movimentações da conta</h1>
             <p>Entradas, saídas e avisos em tempo real em uma visão simples.</p>
           </div>
@@ -534,6 +650,36 @@ function App() {
         </section>
 
         <section className="expenses-panel" aria-label="Planejamento financeiro">
+          <div className="section-accordion-bar">
+            <span className="section-accordion-title">Planejamento financeiro</span>
+            <button
+              type="button"
+              className="ghost-action accordion-toggle"
+              onClick={() => setIsPlanningCollapsed((current) => !current)}
+              aria-expanded={!isPlanningCollapsed}
+              aria-controls="planning-accordion-content"
+            >
+              {isPlanningCollapsed ? (
+                <>
+                  <ChevronDown size={16} aria-hidden="true" />
+                  Expandir
+                </>
+              ) : (
+                <>
+                  <ChevronUp size={16} aria-hidden="true" />
+                  Minimizar
+                </>
+              )}
+            </button>
+          </div>
+
+          <div
+            id="planning-accordion-content"
+            className={`planning-accordion-content ${
+              isPlanningCollapsed ? 'collapsed' : 'expanded'
+            }`}
+            aria-hidden={isPlanningCollapsed}
+          >
           <div
             className={`expenses-header ${
               planningView === 'devedores_credores' ? 'single-column' : ''
@@ -568,32 +714,10 @@ function App() {
               {planningView === 'planejamento' ? (
                 <>
                   <h2>Despesas</h2>
-                  <p>Cadastre uma despesa, arraste movimentações ou adicione pela lista.</p>
-                  <div className="expense-tabs" role="tablist" aria-label="Filtrar despesas">
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={expenseTab === 'em_andamento'}
-                      className={expenseTab === 'em_andamento' ? 'active' : ''}
-                      onClick={() => setExpenseTab('em_andamento')}
-                    >
-                      Em andamento
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={expenseTab === 'concluidas'}
-                      className={expenseTab === 'concluidas' ? 'active' : ''}
-                      onClick={() => setExpenseTab('concluidas')}
-                    >
-                      Concluídas
-                    </button>
-                  </div>
                 </>
               ) : (
                 <>
-                  <h2>Devedores e credores</h2>
-                  <p>Cadastre clientes e acompanhe valores devidos ou creditados.</p>
+                  <h2>Devedores e credores</h2>                  
                 </>
               )}
             </div>
@@ -607,6 +731,7 @@ function App() {
                     placeholder="Ex.: Impostos"
                     value={expenseName}
                     onChange={(event) => setExpenseName(event.target.value)}
+                    disabled={isGuest}
                   />
                 </label>
                 <label className="compact-field">
@@ -617,12 +742,15 @@ function App() {
                     placeholder="0,00"
                     value={expenseAmount}
                     onChange={(event) => setExpenseAmount(event.target.value)}
+                    disabled={isGuest}
                   />
                 </label>
-                <button className="primary-action expense-submit" type="submit">
-                  <Plus size={18} aria-hidden="true" />
-                  Cadastrar
-                </button>
+                {!isGuest && (
+                  <button className="primary-action expense-submit" type="submit">
+                    <Plus size={18} aria-hidden="true" />
+                    Cadastrar
+                  </button>
+                )}
               </form>
             ) : null}
           </div>
@@ -639,6 +767,7 @@ function App() {
                   placeholder="Ex.: João Silva"
                   value={counterpartyName}
                   onChange={(event) => setCounterpartyName(event.target.value)}
+                  disabled={isGuest}
                 />
               </label>
               <label className="compact-field">
@@ -648,6 +777,7 @@ function App() {
                   placeholder="Ex.: Compra de insumos"
                   value={counterpartyDescription}
                   onChange={(event) => setCounterpartyDescription(event.target.value)}
+                  disabled={isGuest}
                 />
               </label>
               <label className="compact-field">
@@ -658,6 +788,7 @@ function App() {
                   placeholder="0,00"
                   value={counterpartyAmount}
                   onChange={(event) => setCounterpartyAmount(event.target.value)}
+                  disabled={isGuest}
                 />
               </label>
               <label className="compact-field">
@@ -668,15 +799,18 @@ function App() {
                   onChange={(event) =>
                     setCounterpartyType(event.target.value as CounterpartyType)
                   }
+                  disabled={isGuest}
                 >
                   <option value="devedor">Devedor</option>
                   <option value="credor">Credor</option>
                 </select>
               </label>
-              <button className="primary-action expense-submit" type="submit">
-                <Plus size={18} aria-hidden="true" />
-                Cadastrar
-              </button>
+              {!isGuest && (
+                <button className="primary-action expense-submit" type="submit">
+                  <Plus size={18} aria-hidden="true" />
+                  Cadastrar
+                </button>
+              )}
             </form>
           )}
 
@@ -741,47 +875,49 @@ function App() {
                         <span>{expense.isCompleted ? 'Concluída' : 'Em andamento'}</span>
                       </div>
                     )}
-                    <div className="expense-actions">
-                      {editingExpenseId === expense.id ? (
-                        <>
-                          <button
-                            className="icon-action"
-                            type="button"
-                            aria-label="Salvar despesa"
-                            onClick={() => saveExpenseEdit(expense.id)}
-                          >
-                            <Check size={17} aria-hidden="true" />
-                          </button>
-                          <button
-                            className="icon-action muted"
-                            type="button"
-                            aria-label="Cancelar edição"
-                            onClick={cancelEditingExpense}
-                          >
-                            <X size={17} aria-hidden="true" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="icon-action"
-                            type="button"
-                            aria-label={`Editar ${expense.name}`}
-                            onClick={() => startEditingExpense(expense)}
-                          >
-                            <Pencil size={17} aria-hidden="true" />
-                          </button>
-                          <button
-                            className="icon-action danger"
-                            type="button"
-                            aria-label={`Excluir ${expense.name}`}
-                            onClick={() => deleteExpense(expense.id)}
-                          >
-                            <Trash2 size={17} aria-hidden="true" />
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    {!isGuest && (
+                      <div className="expense-actions">
+                        {editingExpenseId === expense.id ? (
+                          <>
+                            <button
+                              className="icon-action"
+                              type="button"
+                              aria-label="Salvar despesa"
+                              onClick={() => saveExpenseEdit(expense.id)}
+                            >
+                              <Check size={17} aria-hidden="true" />
+                            </button>
+                            <button
+                              className="icon-action muted"
+                              type="button"
+                              aria-label="Cancelar edição"
+                              onClick={cancelEditingExpense}
+                            >
+                              <X size={17} aria-hidden="true" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className="icon-action"
+                              type="button"
+                              aria-label={`Editar ${expense.name}`}
+                              onClick={() => startEditingExpense(expense)}
+                            >
+                              <Pencil size={17} aria-hidden="true" />
+                            </button>
+                            <button
+                              className="icon-action danger"
+                              type="button"
+                              aria-label={`Excluir ${expense.name}`}
+                              onClick={() => deleteExpense(expense.id)}
+                            >
+                              <Trash2 size={17} aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="expense-progress" aria-label={`${expense.progress}% concluída`}>
@@ -793,7 +929,7 @@ function App() {
                     <strong>{currencyFormatter.format(expense.targetAmount)}</strong>
                   </div>
 
-                  <div className="manual-assignment">
+                  {!isGuest && <div className="manual-assignment">
                     <select
                       aria-label={`Movimentação para adicionar em ${expense.name}`}
                       value={selectedMovementByExpenseId[expense.id] ?? ''}
@@ -826,7 +962,7 @@ function App() {
                     >
                       <Link2 size={17} aria-hidden="true" />
                     </button>
-                  </div>
+                  </div>}
 
                   <div className="assigned-movements">
                     {expense.assignedMovements.length > 0 ? (
@@ -835,16 +971,18 @@ function App() {
                           <span>
                             {movement.name} · {formatCurrency(movement.amount, movement.type)}
                           </span>
-                          <button
-                            className="icon-action muted"
-                            type="button"
-                            aria-label={`Remover ${movement.name} de ${expense.name}`}
-                            onClick={() =>
-                              removeMovementFromExpense(expense.id, movement.id)
-                            }
-                          >
-                            <X size={15} aria-hidden="true" />
-                          </button>
+                          {!isGuest && (
+                            <button
+                              className="icon-action muted"
+                              type="button"
+                              aria-label={`Remover ${movement.name} de ${expense.name}`}
+                              onClick={() =>
+                                removeMovementFromExpense(expense.id, movement.id)
+                              }
+                            >
+                              <X size={15} aria-hidden="true" />
+                            </button>
+                          )}
                         </div>
                       ))
                     ) : (
@@ -857,11 +995,7 @@ function App() {
               {visibleExpenses.length === 0 && (
                 <div className="empty-state">
                   <Wallet size={24} aria-hidden="true" />
-                  <strong>
-                    {expenseTab === 'concluidas'
-                      ? 'Nenhuma despesa concluída'
-                      : 'Nenhuma despesa em andamento'}
-                  </strong>
+                  <strong>Nenhuma despesa cadastrada</strong>
                 </div>
               )}
             </div>
@@ -879,14 +1013,16 @@ function App() {
                       <strong>{entry.name}</strong>
                       <span>{entry.type === 'devedor' ? 'Devedor' : 'Credor'}</span>
                     </div>
-                    <button
-                      className="icon-action muted"
-                      type="button"
-                      aria-label={`Remover ${entry.name}`}
-                      onClick={() => removeCounterpartyEntry(entry.id)}
-                    >
-                      <X size={15} aria-hidden="true" />
-                    </button>
+                    {!isGuest && (
+                      <button
+                        className="icon-action muted"
+                        type="button"
+                        aria-label={`Remover ${entry.name}`}
+                        onClick={() => removeCounterpartyEntry(entry.id)}
+                      >
+                        <X size={15} aria-hidden="true" />
+                      </button>
+                    )}
                   </div>
                   <p className="counterparty-description">{entry.description}</p>
                   <strong className="counterparty-value">
@@ -903,80 +1039,115 @@ function App() {
               )}
             </div>
           )}
+          </div>
         </section>
 
-        <section className="content-layout">
-          <aside className="filters-panel" aria-label="Filtros de movimentações">
-            <div className="panel-title">
-              <SlidersHorizontal size={18} aria-hidden="true" />
-              <h2>Filtros</h2>
-            </div>
+        <section
+          className="expenses-panel statement-accordion-shell"
+          aria-label="Extrato financeiro"
+        >
+          <div className="section-accordion-bar">
+            <span className="section-accordion-title">Extrato</span>
+            <button
+              type="button"
+              className="ghost-action accordion-toggle"
+              onClick={() => setIsStatementCollapsed((current) => !current)}
+              aria-expanded={!isStatementCollapsed}
+              aria-controls="statement-accordion-content"
+            >
+              {isStatementCollapsed ? (
+                <>
+                  <ChevronDown size={16} aria-hidden="true" />
+                  Expandir
+                </>
+              ) : (
+                <>
+                  <ChevronUp size={16} aria-hidden="true" />
+                  Minimizar
+                </>
+              )}
+            </button>
+          </div>
 
-            <label className="field search-field">
-              <span>Nome</span>
-              <div>
-                <Search size={18} aria-hidden="true" />
-                <input
-                  type="search"
-                  placeholder="Buscar por nome"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                />
-              </div>
-            </label>
+          <div
+            id="statement-accordion-content"
+            className={`statement-accordion-content ${
+              isStatementCollapsed ? 'collapsed' : 'expanded'
+            }`}
+            aria-hidden={isStatementCollapsed}
+          >
+            <section className="content-layout">
+              <aside className="filters-panel" aria-label="Filtros de movimentações">
+                <div className="panel-title">
+                  <SlidersHorizontal size={18} aria-hidden="true" />
+                  <h2>Filtros</h2>
+                </div>
 
-            <div className="segmented-control" aria-label="Tipo de movimentação">
-              <button
-                className={typeFilter === 'todos' ? 'active' : ''}
-                type="button"
-                onClick={() => setTypeFilter('todos')}
-              >
-                Todos
-              </button>
-              <button
-                className={typeFilter === 'entrada' ? 'active' : ''}
-                type="button"
-                onClick={() => setTypeFilter('entrada')}
-              >
-                <ArrowDownLeft size={16} aria-hidden="true" />
-                Entradas
-              </button>
-              <button
-                className={typeFilter === 'saida' ? 'active' : ''}
-                type="button"
-                onClick={() => setTypeFilter('saida')}
-              >
-                <ArrowUpRight size={16} aria-hidden="true" />
-                Saídas
-              </button>
-            </div>
+                <label className="field search-field">
+                  <span>Nome</span>
+                  <div>
+                    <Search size={18} aria-hidden="true" />
+                    <input
+                      type="search"
+                      placeholder="Buscar por nome"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                    />
+                  </div>
+                </label>
 
-            <label className="field">
-              <span>Data inicial</span>
-              <div>
-                <CalendarDays size={18} aria-hidden="true" />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                />
-              </div>
-            </label>
+                <div className="segmented-control" aria-label="Tipo de movimentação">
+                  <button
+                    className={typeFilter === 'todos' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setTypeFilter('todos')}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    className={typeFilter === 'entrada' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setTypeFilter('entrada')}
+                  >
+                    <ArrowDownLeft size={16} aria-hidden="true" />
+                    Entradas
+                  </button>
+                  <button
+                    className={typeFilter === 'saida' ? 'active' : ''}
+                    type="button"
+                    onClick={() => setTypeFilter('saida')}
+                  >
+                    <ArrowUpRight size={16} aria-hidden="true" />
+                    Saídas
+                  </button>
+                </div>
 
-            <label className="field">
-              <span>Data final</span>
-              <div>
-                <CalendarDays size={18} aria-hidden="true" />
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(event) => setEndDate(event.target.value)}
-                />
-              </div>
-            </label>
-          </aside>
+                <label className="field">
+                  <span>Data inicial</span>
+                  <div>
+                    <CalendarDays size={18} aria-hidden="true" />
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(event) => setStartDate(event.target.value)}
+                    />
+                  </div>
+                </label>
 
-          <section className="movements-panel" aria-label="Lista de movimentações">
+                <label className="field">
+                  <span>Data final</span>
+                  <div>
+                    <CalendarDays size={18} aria-hidden="true" />
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(event) => setEndDate(event.target.value)}
+                    />
+                  </div>
+                </label>
+              </aside>
+
+              <section className="movements-panel" aria-label="Lista de movimentações">
             <div className="movements-header">
               <div>
                 <h2>Extrato</h2>
@@ -986,25 +1157,107 @@ function App() {
                 )}
               </div>
               <div className="movements-actions">
-                <button
-                  className="ghost-action"
-                  type="button"
-                  onClick={() => runPixImport('manual')}
-                  disabled={isImportingMovements}
-                >
-                  <RefreshCw
-                    className={isImportingMovements ? 'spin' : ''}
-                    size={17}
-                    aria-hidden="true"
-                  />
-                  {isImportingMovements ? 'Atualizando...' : 'Atualizar extrato'}
-                </button>
-                <button className="ghost-action" type="button">
-                  <Download size={17} aria-hidden="true" />
-                  Exportar
-                </button>
+                {isAdmin && (
+                  <button
+                    className="ghost-action"
+                    type="button"
+                    onClick={() => runPixImport('manual')}
+                    disabled={isImportingMovements}
+                  >
+                    <RefreshCw
+                      className={isImportingMovements ? 'spin' : ''}
+                      size={17}
+                      aria-hidden="true"
+                    />
+                    {isImportingMovements ? 'Atualizando...' : 'Atualizar extrato'}
+                  </button>
+                )}
+                {!isGuest && (
+                  <button className="ghost-action" type="button">
+                    <Download size={17} aria-hidden="true" />
+                    Exportar
+                  </button>
+                )}
               </div>
             </div>
+
+            {isAdmin && (
+              <section className="manual-movement-panel" aria-label="Lançamento manual em dinheiro">
+                <div className="manual-movement-panel-header">
+                  <h3>Dinheiro manual</h3>
+                </div>
+
+                <form className="movement-form movement-form-inline" onSubmit={addManualMovement}>
+                  <label className="field search-field">
+                    <span>Descrição</span>
+                    <div>
+                      <Wallet size={18} aria-hidden="true" />
+                      <input
+                        type="text"
+                        placeholder="Ex.: Pagamento em dinheiro"
+                        value={manualMovementName}
+                        onChange={(event) => setManualMovementName(event.target.value)}
+                        disabled={!isAdmin}
+                      />
+                    </div>
+                  </label>
+
+                  <label className="field search-field">
+                    <span>Valor</span>
+                    <div>
+                      <ArrowUpRight size={18} aria-hidden="true" />
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        value={manualMovementAmount}
+                        onChange={(event) => setManualMovementAmount(event.target.value)}
+                        disabled={!isAdmin}
+                      />
+                    </div>
+                  </label>
+
+                  <div
+                    className="segmented-control manual-movement-type-toggle"
+                    aria-label="Tipo da movimentação manual"
+                  >
+                    <button
+                      type="button"
+                      className={manualMovementType === 'entrada' ? 'active' : ''}
+                      onClick={() => setManualMovementType('entrada')}
+                      disabled={!isAdmin}
+                    >
+                      <ArrowDownLeft size={16} aria-hidden="true" />
+                      Entrada
+                    </button>
+                    <button
+                      type="button"
+                      className={`manual-movement-saida ${
+                        manualMovementType === 'saida' ? 'active' : ''
+                      }`}
+                      onClick={() => setManualMovementType('saida')}
+                      disabled={!isAdmin}
+                    >
+                      <ArrowUpRight size={16} aria-hidden="true" />
+                      Saída
+                    </button>
+                  </div>
+
+                  <button
+                    className="primary-action"
+                    type="submit"
+                    disabled={isAddingManualMovement}
+                  >
+                    <Plus size={17} aria-hidden="true" />
+                    {'Lançar no extrato'}
+                  </button>
+                </form>
+
+                {manualMovementMessage && (
+                  <p className="manual-movement-message">{manualMovementMessage}</p>
+                )}
+              </section>
+            )}
 
             <div className="movement-list">
               {filteredMovements.map((movement) => {
@@ -1017,7 +1270,7 @@ function App() {
                     className={`movement-row ${
                       draggedMovementId === movement.id ? 'dragging' : ''
                     }`}
-                    draggable
+                    draggable={!isGuest}
                     key={movement.id}
                     onDragEnd={() => setDraggedMovementId(null)}
                     onDragStart={(event) => handleMovementDragStart(event, movement.id)}
@@ -1051,7 +1304,9 @@ function App() {
                 </div>
               )}
             </div>
-          </section>
+              </section>
+            </section>
+          </div>
         </section>
       </main>
     </ProtectedRoute>

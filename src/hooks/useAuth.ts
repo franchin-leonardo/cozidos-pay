@@ -4,8 +4,79 @@ import { supabase } from '../lib/supabase'
 export type User = {
   id: string
   email: string
+  role: 'admin' | 'user' | 'guest'
   user_metadata?: {
-    role?: 'admin' | 'user'
+    role?: 'admin' | 'user' | 'guest'
+  }
+  app_metadata?: {
+    role?: string
+    user_role?: string
+    is_admin?: boolean
+    claims?: {
+      role?: string
+      user_role?: string
+      app_role?: string
+      is_admin?: boolean
+    }
+  }
+}
+
+function resolveUserRole(rawUser: any): 'admin' | 'user' | 'guest' {
+  const normalizedEmail = String(rawUser?.email ?? '').trim().toLowerCase()
+
+  if (
+    rawUser?.user_metadata?.is_admin === true ||
+    rawUser?.app_metadata?.is_admin === true ||
+    rawUser?.app_metadata?.claims?.is_admin === true
+  ) {
+    return 'admin'
+  }
+
+  const roleCandidates = [
+    rawUser?.user_metadata?.role,
+    rawUser?.user_metadata?.user_role,
+    rawUser?.app_metadata?.role,
+    rawUser?.app_metadata?.user_role,
+    rawUser?.app_metadata?.claims?.role,
+    rawUser?.app_metadata?.claims?.user_role,
+    rawUser?.app_metadata?.claims?.app_role,
+  ]
+
+  for (const candidate of roleCandidates) {
+    const normalizedRole = String(candidate ?? '').trim().toLowerCase()
+    if (!normalizedRole) {
+      continue
+    }
+
+    if (normalizedRole === 'admin' || normalizedRole.includes('admin')) {
+      return 'admin'
+    }
+
+    if (normalizedRole === 'guest' || normalizedRole === 'visitante') {
+      return 'guest'
+    }
+  }
+
+  // Fallback para o usuário admin criado pelo script do projeto.
+  if (normalizedEmail === 'admin@cozidos.com') {
+    return 'admin'
+  }
+
+  return 'user'
+}
+
+function mapAuthUser(rawUser: any): User {
+  const role = resolveUserRole(rawUser)
+
+  return {
+    id: rawUser.id,
+    email: rawUser.email || '',
+    role,
+    user_metadata: {
+      ...rawUser.user_metadata,
+      role,
+    },
+    app_metadata: rawUser.app_metadata,
   }
 }
 
@@ -24,25 +95,13 @@ export function useAuth() {
         } = await supabase.auth.getSession()
 
         if (session?.user) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-            user_metadata: {
-              role: session.user.user_metadata?.role || 'user',
-            },
-          })
+          setUser(mapAuthUser(session.user))
         }
 
         // Listener para mudanças de autenticação
         supabase.auth.onAuthStateChange((_event, session) => {
           if (session?.user) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              user_metadata: {
-                role: session.user.user_metadata?.role || 'user',
-              },
-            })
+            setUser(mapAuthUser(session.user))
           } else {
             setUser(null)
           }
@@ -76,13 +135,13 @@ export function useAuth() {
       if (error) throw error
 
       if (data.user) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email || '',
+        setUser(mapAuthUser({
+          ...data.user,
           user_metadata: {
+            ...data.user.user_metadata,
             role,
           },
-        })
+        }))
       }
 
       setError(null)
@@ -107,13 +166,7 @@ export function useAuth() {
       if (error) throw error
 
       if (data.user) {
-        setUser({
-          id: data.user.id,
-          email: data.user.email || '',
-          user_metadata: {
-            role: data.user.user_metadata?.role || 'user',
-          },
-        })
+        setUser(mapAuthUser(data.user))
       }
 
       setError(null)
@@ -128,6 +181,12 @@ export function useAuth() {
   }
 
   const signOut = async () => {
+    if (user?.role === 'guest') {
+      setUser(null)
+      setError(null)
+      return
+    }
+
     try {
       setLoading(true)
       const { error } = await supabase.auth.signOut()
@@ -145,7 +204,23 @@ export function useAuth() {
     }
   }
 
-  const isAdmin = user?.user_metadata?.role === 'admin'
+  const signInAsGuest = async () => {
+    setUser({
+      id: `guest-${Date.now()}`,
+      email: 'visitante@cozidospay.local',
+      role: 'guest',
+      user_metadata: {
+        role: 'guest',
+      },
+      app_metadata: {
+        role: 'guest',
+      },
+    })
+    setError(null)
+  }
+
+  const isAdmin = user?.role === 'admin'
+  const isGuest = user?.role === 'guest'
 
   return {
     user,
@@ -153,8 +228,10 @@ export function useAuth() {
     error,
     isAuthenticated: !!user,
     isAdmin,
+    isGuest,
     signUp,
     signIn,
+    signInAsGuest,
     signOut,
   }
 }

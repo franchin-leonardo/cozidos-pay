@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/useAuthContext'
 import './UserMenu.css'
 
 export function UserMenu() {
-  const { user, signOut, isAdmin } = useAuthContext()
+  const { user, signOut, isAdmin, isGuest } = useAuthContext()
 
   const handleLogout = async () => {
     try {
@@ -22,6 +22,7 @@ export function UserMenu() {
         <div className="user-details">
           <span className="user-email">{user?.email}</span>
           {isAdmin && <span className="user-badge">Admin</span>}
+          {isGuest && <span className="user-badge">Visitante</span>}
         </div>
       </div>
       <button className="logout-button" onClick={handleLogout} title="Sair">
