@@ -186,7 +186,11 @@ input:focus-visible {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: end;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
+}
+
+.expenses-header.single-column {
+  grid-template-columns: 1fr;
 }
 
 .section-kicker {
@@ -196,6 +200,29 @@ input:focus-visible {
   font-size: 13px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.planning-view-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.planning-view-tabs button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-strong);
+  background: #f4f7f5;
+  font-weight: 700;
+}
+
+.planning-view-tabs button.active {
+  border-color: rgba(28, 126, 78, 0.22);
+  color: #123b25;
+  background: var(--green-button);
 }
 
 .expense-tabs {
@@ -228,12 +255,28 @@ input:focus-visible {
   align-items: end;
 }
 
+.counterparty-form {
+  width: min(100%, 720px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.counterparty-form-below {
+  margin-top: 8px;
+  margin-bottom: 18px;
+}
+
+.counterparty-form .expense-submit {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
 .compact-field {
   display: grid;
   gap: 6px;
 }
 
-.compact-field input {
+.compact-field input,
+.compact-field select {
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
@@ -243,7 +286,8 @@ input:focus-visible {
   background: #fbfdfb;
 }
 
-.compact-field input:focus {
+.compact-field input:focus,
+.compact-field select:focus {
   outline: 0;
 }
 
@@ -255,6 +299,72 @@ input:focus-visible {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 14px;
+}
+
+.counterparty-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.counterparty-card {
+  display: grid;
+  gap: 12px;
+  min-height: 140px;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+.counterparty-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.counterparty-card-top strong {
+  display: block;
+  color: var(--text-strong);
+}
+
+.counterparty-card-top span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.counterparty-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.counterparty-value {
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.counterparty-card.devedor {
+  border-color: #f3b6ad;
+  background: linear-gradient(180deg, #fff1ee 0%, #ffffff 100%);
+}
+
+.counterparty-card.devedor .counterparty-card-top span,
+.counterparty-card.devedor .counterparty-value {
+  color: #b44232;
+}
+
+.counterparty-card.credor {
+  border-color: #8dd9a8;
+  background: linear-gradient(180deg, #e9fff1 0%, #ffffff 100%);
+}
+
+.counterparty-card.credor .counterparty-card-top span,
+.counterparty-card.credor .counterparty-value {
+  color: #1f8b54;
 }
 
 .expense-card {
@@ -726,6 +836,19 @@ input:focus-visible {
 
   .expense-tabs {
     display: grid;
+  }
+
+  .planning-view-tabs {
+    display: grid;
+  }
+
+  .counterparty-form {
+    grid-template-columns: 1fr;
+  }
+
+  .counterparty-form .expense-submit {
+    width: 100%;
+    justify-self: stretch;
   }
 
   .expense-top {
