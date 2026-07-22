@@ -512,10 +512,36 @@ input:focus-visible {
   border-bottom: 1px solid var(--border);
 }
 
+.movements-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .ghost-action {
   padding: 0 14px;
   color: var(--green-strong);
   background: var(--green-soft);
+}
+
+.ghost-action:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.import-status-message {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .movement-list {
@@ -678,6 +704,10 @@ input:focus-visible {
 
   .movements-header {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .movements-actions {
     flex-direction: column;
   }
 

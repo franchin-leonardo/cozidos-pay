@@ -1,8 +1,14 @@
-import { type DragEvent, type FormEvent, useState } from 'react'
+import {
+  type DragEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  BellRing,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -11,6 +17,7 @@ import {
   Link2,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   Trash2,
@@ -84,12 +91,6 @@ const initialMovements: Movement[] = [
   },
 ]
 
-const movementTemplates = [
-  { name: 'Pix Cliente recorrente', amount: 492.75, type: 'entrada' as const },
-  { name: 'Pagamento motoboy', amount: 86.4, type: 'saida' as const },
-  { name: 'Venda delivery', amount: 318.2, type: 'entrada' as const },
-]
-
 const initialExpenses: Expense[] = [
   {
     id: 'expense-001',
@@ -124,17 +125,6 @@ function formatDate(date: string) {
   return dateFormatter.format(new Date(`${date}T12:00:00`))
 }
 
-function getToday() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function getCurrentTime() {
-  return new Intl.DateTimeFormat('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date())
-}
-
 function parseCurrencyInput(value: string) {
   return Number(value.replace(/\./g, '').replace(',', '.'))
 }
@@ -143,7 +133,7 @@ function App() {
   // Hooks do Supabase para gerenciar dados em tempo real
   const {
     movements,
-    addNewMovement,
+    reloadMovements,
   } = useMovements(initialMovements)
   const {
     expenses,
@@ -169,9 +159,9 @@ function App() {
   >({})
   const [draggedMovementId, setDraggedMovementId] = useState<string | null>(null)
   const [dragOverExpenseId, setDragOverExpenseId] = useState<string | null>(null)
-  const [latestNotification, setLatestNotification] = useState<Movement>(
-    initialMovements[0],
-  )
+  const [isImportingMovements, setIsImportingMovements] = useState(false)
+  const [importStatusMessage, setImportStatusMessage] = useState('')
+  const hasTriggeredAutoImport = useRef(false)
 
   const filteredMovements = movements.filter((movement) => {
     const matchesName = movement.name
@@ -224,19 +214,6 @@ function App() {
       isCompleted: assignedTotal >= expense.targetAmount,
     }
   })
-
-  function simulateMovement() {
-    const template = movementTemplates[movements.length % movementTemplates.length]
-    const movement: Movement = {
-      ...template,
-      id: `mov-${Date.now()}`,
-      date: getToday(),
-      time: getCurrentTime(),
-    }
-
-    addNewMovement(movement)
-    setLatestNotification(movement)
-  }
 
   function addExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -355,6 +332,60 @@ function App() {
     setDragOverExpenseId(null)
   }
 
+  const runPixImport = useCallback(async (source: 'auto' | 'manual') => {
+    if (isImportingMovements) {
+      return
+    }
+
+    setIsImportingMovements(true)
+    setImportStatusMessage(
+      source === 'auto'
+        ? 'Sincronizando extrato automaticamente...'
+        : 'Sincronizando extrato manualmente...',
+    )
+
+    try {
+      const response = await fetch('/api/import-pix', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ max: 30 }),
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || 'Não foi possível importar o extrato agora.')
+      }
+
+      await reloadMovements()
+
+      const inserted = Number(payload?.result?.inserted ?? 0)
+      const skipped = Number(payload?.result?.skipped ?? 0)
+      setImportStatusMessage(
+        `Extrato atualizado: ${inserted} nova(s), ${skipped} ignorada(s).`,
+      )
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Não foi possível atualizar o extrato.'
+
+      setImportStatusMessage(`Falha na sincronização: ${message}`)
+    } finally {
+      setIsImportingMovements(false)
+    }
+  }, [isImportingMovements, reloadMovements])
+
+  useEffect(() => {
+    if (hasTriggeredAutoImport.current) {
+      return
+    }
+
+    hasTriggeredAutoImport.current = true
+    void runPixImport('auto')
+  }, [runPixImport])
+
   return (
     <ProtectedRoute>
       <main className="app-shell">
@@ -365,26 +396,9 @@ function App() {
             <p>Entradas, saídas e avisos em tempo real em uma visão simples.</p>
           </div>
           <div className="header-actions">
-            <button className="primary-action" type="button" onClick={simulateMovement}>
-              <BellRing size={18} aria-hidden="true" />
-              Simular notificação
-            </button>
             <UserMenu />
           </div>
         </header>
-
-      <section className="notification-strip" aria-live="polite">
-        <div className="notification-icon">
-          <BellRing size={20} aria-hidden="true" />
-        </div>
-        <div>
-          <span>Nova movimentação</span>
-          <strong>{latestNotification.name}</strong>
-        </div>
-        <span className={`notification-value ${latestNotification.type}`}>
-          {formatCurrency(latestNotification.amount, latestNotification.type)}
-        </span>
-      </section>
 
       <section className="summary-grid" aria-label="Resumo financeiro">
         <article className="summary-panel entrada">
@@ -667,11 +681,29 @@ function App() {
             <div>
               <h2>Extrato</h2>
               <p>{filteredMovements.length} movimentações encontradas</p>
+              {importStatusMessage && (
+                <p className="import-status-message">{importStatusMessage}</p>
+              )}
             </div>
-            <button className="ghost-action" type="button">
-              <Download size={17} aria-hidden="true" />
-              Exportar
-            </button>
+            <div className="movements-actions">
+              <button
+                className="ghost-action"
+                type="button"
+                onClick={() => runPixImport('manual')}
+                disabled={isImportingMovements}
+              >
+                <RefreshCw
+                  className={isImportingMovements ? 'spin' : ''}
+                  size={17}
+                  aria-hidden="true"
+                />
+                {isImportingMovements ? 'Atualizando...' : 'Atualizar extrato'}
+              </button>
+              <button className="ghost-action" type="button">
+                <Download size={17} aria-hidden="true" />
+                Exportar
+              </button>
+            </div>
           </div>
 
           <div className="movement-list">

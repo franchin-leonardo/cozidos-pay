@@ -7,10 +7,15 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gmail:auth:url": "node scripts/gmail-auth.mjs url",
+    "gmail:auth:token": "node scripts/gmail-auth.mjs token",
+    "gmail:import-pix": "node scripts/import-nubank-pix.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
+    "dotenv": "^17.4.2",
+    "googleapis": "^173.0.0",
     "lucide-react": "^1.23.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

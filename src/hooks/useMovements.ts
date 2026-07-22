@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getMovements, addMovement, deleteMovement } from '../lib/supabaseService'
 
 export type Movement = {
@@ -15,35 +15,33 @@ export function useMovements(initialData: Movement[]) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const reloadMovements = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await getMovements()
+      // Sempre sincroniza com Supabase, inclusive quando vazio.
+      const mapped = data.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        amount: Number(m.amount),
+        type: m.type as 'entrada' | 'saida',
+        date: m.date,
+        time: m.time,
+      }))
+      setMovements(mapped)
+      setError(null)
+    } catch (err) {
+      console.error('Erro ao carregar movimentações:', err)
+      setError('Não foi possível carregar as movimentações')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   // Carregar movimentações do Supabase ao montar
   useEffect(() => {
-    const loadMovements = async () => {
-      try {
-        setLoading(true)
-        const data = await getMovements()
-        if (data && data.length > 0) {
-          // Mapear dados do Supabase para o formato esperado
-          const mapped = data.map((m: any) => ({
-            id: m.id,
-            name: m.name,
-            amount: Number(m.amount),
-            type: m.type as 'entrada' | 'saida',
-            date: m.date,
-            time: m.time,
-          }))
-          setMovements(mapped)
-        }
-        setError(null)
-      } catch (err) {
-        console.error('Erro ao carregar movimentações:', err)
-        setError('Não foi possível carregar as movimentações')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadMovements()
-  }, [])
+    reloadMovements()
+  }, [reloadMovements])
 
   const addNewMovement = async (movement: Omit<Movement, 'id'>) => {
     try {
@@ -111,6 +109,7 @@ export function useMovements(initialData: Movement[]) {
     setMovements,
     loading,
     error,
+    reloadMovements,
     addNewMovement,
     removeMovement,
   }
