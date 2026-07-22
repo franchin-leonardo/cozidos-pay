@@ -125,17 +125,6 @@ function formatDate(date: string) {
   return dateFormatter.format(new Date(`${date}T12:00:00`))
 }
 
-function getToday() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function getCurrentTime() {
-  return new Intl.DateTimeFormat('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date())
-}
-
 function parseCurrencyInput(value: string) {
   return Number(value.replace(/\./g, '').replace(',', '.'))
 }
@@ -144,7 +133,6 @@ function App() {
   // Hooks do Supabase para gerenciar dados em tempo real
   const {
     movements,
-    addNewMovement,
     reloadMovements,
   } = useMovements(initialMovements)
   const {
@@ -161,9 +149,6 @@ function App() {
   const [typeFilter, setTypeFilter] = useState<MovementType | 'todos'>('todos')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [manualMovementName, setManualMovementName] = useState('')
-  const [manualMovementAmount, setManualMovementAmount] = useState('')
-  const [manualMovementType, setManualMovementType] = useState<MovementType>('entrada')
   const [expenseName, setExpenseName] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseTab, setExpenseTab] = useState<'em_andamento' | 'concluidas'>('em_andamento')
@@ -234,27 +219,6 @@ function App() {
   const visibleExpenses = expensesWithProgress.filter((expense) =>
     expenseTab === 'concluidas' ? expense.isCompleted : !expense.isCompleted,
   )
-
-  async function addManualMovement(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    const amount = parseCurrencyInput(manualMovementAmount)
-    if (!manualMovementName.trim() || Number.isNaN(amount) || amount <= 0) {
-      return
-    }
-
-    await addNewMovement({
-      name: manualMovementName.trim(),
-      amount,
-      type: manualMovementType,
-      date: getToday(),
-      time: getCurrentTime(),
-    })
-
-    setManualMovementName('')
-    setManualMovementAmount('')
-    setManualMovementType('entrada')
-  }
 
   function addExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -807,45 +771,6 @@ function App() {
               </button>
             </div>
           </div>
-
-          <form className="movement-form" onSubmit={addManualMovement}>
-            <label className="compact-field">
-              <span>Descrição</span>
-              <input
-                aria-label="Descrição da movimentação"
-                placeholder="Ex.: Pix cliente"
-                value={manualMovementName}
-                onChange={(event) => setManualMovementName(event.target.value)}
-              />
-            </label>
-            <label className="compact-field">
-              <span>Valor</span>
-              <input
-                aria-label="Valor da movimentação"
-                inputMode="decimal"
-                placeholder="0,00"
-                value={manualMovementAmount}
-                onChange={(event) => setManualMovementAmount(event.target.value)}
-              />
-            </label>
-            <label className="compact-field">
-              <span>Tipo</span>
-              <select
-                aria-label="Tipo da movimentação"
-                value={manualMovementType}
-                onChange={(event) =>
-                  setManualMovementType(event.target.value as MovementType)
-                }
-              >
-                <option value="entrada">Entrada</option>
-                <option value="saida">Saída</option>
-              </select>
-            </label>
-            <button className="primary-action" type="submit">
-              <Plus size={18} aria-hidden="true" />
-              Adicionar
-            </button>
-          </form>
 
           <div className="movement-list">
             {filteredMovements.map((movement) => {
