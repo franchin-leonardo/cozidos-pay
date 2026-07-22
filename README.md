@@ -80,61 +80,53 @@ Opcional para EDI PagBank (Consultar movimentos):
 
 Sem essas variaveis, o app sobe mas nao consegue autenticar nem carregar dados do Supabase.
 
-## Webhook PagBank (Notificacoes)
+## Importar PIX da Nubank via Gmail
 
-Foi adicionado um endpoint para receber notificacoes de mudanca de status:
+Esta integracao roda por script Node (backend local/cron), para evitar expor segredo do Gmail no frontend.
 
-- URL: `/api/pagbank/webhook`
-- Metodo: `POST`
+### 1) Configure variaveis no `.env.local`
 
-### Configurar no PagBank
+```env
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=SUA_SERVICE_ROLE_KEY
 
-Cadastre no painel/documentacao do PagBank a URL publica do projeto, por exemplo:
+GMAIL_CLIENT_ID=SEU_CLIENT_ID
+GMAIL_CLIENT_SECRET=SEU_CLIENT_SECRET
+GMAIL_REDIRECT_URI=http://localhost:3000/oauth2callback
+GMAIL_REFRESH_TOKEN=SEU_REFRESH_TOKEN
 
-`https://seu-dominio.com/api/pagbank/webhook`
-
-Se quiser proteger com token (recomendado), defina `PAGBANK_WEBHOOK_TOKEN` e cadastre:
-
-`https://seu-dominio.com/api/pagbank/webhook?token=SEU_TOKEN`
-
-### Comportamento atual
-
-- Retorna `200 {"ok": true}` quando recebe notificacao valida.
-- Registra o payload no log da funcao para auditoria inicial.
-- Retorna `401` se token esperado estiver configurado e nao for enviado/corresponder.
-- Retorna `405` para metodos diferentes de `POST`.
-
-### Teste rapido
-
-```bash
-curl -X POST "https://seu-dominio.com/api/pagbank/webhook?token=SEU_TOKEN" \
-   -H "Content-Type: application/json" \
-   -d '{"event":"TRANSACTION_STATUS_CHANGED","transactionCode":"A87..."}'
+PIX_GMAIL_FROM=todomundo@nubank.com.br
+PIX_GMAIL_SUBJECT=Você recebeu uma transferência
 ```
 
-## PagBank EDI - Consultar Movimentos
+### 2) Gerar refresh token (uma vez)
 
-Foi adicionado um endpoint proxy para consulta de movimentos EDI:
-
-- URL: `/api/pagbank/movements`
-- Metodo: `GET`
-
-Query params suportados:
-
-- `dateMovement` (YYYY-MM-DD)
-- `pageNumber` (padrao 1)
-- `pageSize` (padrao 1000)
-- `typeMotion` (`1` transacional, `2` financeiro, `3` antecipacao)
-- `ediVersion` (padrao `2.01`)
-
-Exemplo:
+1. Gere URL de autorizacao:
 
 ```bash
-curl "http://localhost:5173/api/pagbank/movements?dateMovement=2026-07-06&typeMotion=1&pageNumber=1&pageSize=200"
+npm run gmail:auth:url
 ```
 
-Observacoes importantes da doc:
+2. Autorize no navegador e copie o `code` do redirect.
 
-- EDI nao possui sandbox.
-- O token EDI e diferente do token padrao da conta/API.
-- A API pode retornar cabecalho `VALIDADO` para indicar completude dos dados.
+3. Troque por refresh token:
+
+```bash
+npm run gmail:auth:token -- SEU_CODE
+```
+
+4. Salve o valor retornado em `GMAIL_REFRESH_TOKEN`.
+
+### 3) Importar movimentacoes PIX
+
+```bash
+npm run gmail:import-pix
+```
+
+Opcional (simulacao sem gravar):
+
+```bash
+npm run gmail:import-pix -- --dry-run
+```
+
+O script filtra emails por remetente e assunto, extrai nome/valor/data e grava em `movements` como `entrada`.

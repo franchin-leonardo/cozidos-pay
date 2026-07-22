@@ -565,38 +565,36 @@ input:focus-visible {
   border-bottom: 1px solid var(--border);
 }
 
-.movement-form {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) 140px 140px auto;
+.movements-actions {
+  display: flex;
   gap: 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
-  background: #fbfdfb;
-}
-
-.movement-form .compact-field {
-  align-content: end;
-}
-
-.movement-form .compact-field select {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-strong);
-  background: #ffffff;
-}
-
-.movement-form .compact-field select:focus {
-  outline: 3px solid rgba(109, 205, 143, 0.32);
-  outline-offset: 2px;
 }
 
 .ghost-action {
   padding: 0 14px;
   color: var(--green-strong);
   background: var(--green-soft);
+}
+
+.ghost-action:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.import-status-message {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .movement-list {
@@ -771,6 +769,10 @@ input:focus-visible {
 
   .movements-header {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .movements-actions {
     flex-direction: column;
   }
 

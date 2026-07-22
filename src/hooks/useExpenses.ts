@@ -36,8 +36,8 @@ export function useExpenses(initialData: Expense[]) {
       try {
         setLoading(true)
         const data = await getExpenses()
-        // Reflete exatamente o banco: se vier vazio, limpa listas locais.
-        const expensesList = (data as ExpenseDB[] || []).map((e) => ({
+        // Mapear dados do Supabase para o formato esperado
+        const expensesList = (data as ExpenseDB[]).map((e) => ({
           id: e.id,
           name: e.name,
           targetAmount: Number(e.target_amount),
