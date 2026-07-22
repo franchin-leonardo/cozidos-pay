@@ -125,6 +125,17 @@ function formatDate(date: string) {
   return dateFormatter.format(new Date(`${date}T12:00:00`))
 }
 
+function getToday() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function getCurrentTime() {
+  return new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date())
+}
+
 function parseCurrencyInput(value: string) {
   return Number(value.replace(/\./g, '').replace(',', '.'))
 }
@@ -133,6 +144,7 @@ function App() {
   // Hooks do Supabase para gerenciar dados em tempo real
   const {
     movements,
+    addNewMovement,
     reloadMovements,
   } = useMovements(initialMovements)
   const {
@@ -178,12 +190,6 @@ function App() {
     return matchesName && matchesType && matchesStartDate && matchesEndDate
   })
 
-  const statementBalance = filteredMovements.reduce((total, movement) => {
-    return movement.type === 'entrada'
-      ? total + movement.amount
-      : total - movement.amount
-  }, 0)
-
   const totals = movements.reduce(
     (summary, movement) => {
       summary[movement.type] += movement.amount
@@ -224,6 +230,31 @@ function App() {
       isCompleted: assignedTotal >= expense.targetAmount,
     }
   })
+
+  const visibleExpenses = expensesWithProgress.filter((expense) =>
+    expenseTab === 'concluidas' ? expense.isCompleted : !expense.isCompleted,
+  )
+
+  async function addManualMovement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const amount = parseCurrencyInput(manualMovementAmount)
+    if (!manualMovementName.trim() || Number.isNaN(amount) || amount <= 0) {
+      return
+    }
+
+    await addNewMovement({
+      name: manualMovementName.trim(),
+      amount,
+      type: manualMovementType,
+      date: getToday(),
+      time: getCurrentTime(),
+    })
+
+    setManualMovementName('')
+    setManualMovementAmount('')
+    setManualMovementType('entrada')
+  }
 
   function addExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
