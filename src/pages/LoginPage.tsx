@@ -80,14 +80,7 @@ export function LoginPage() {
               </>
             )}
           </button>
-        </form>
-
-        <div className="login-info">
-          <p className="info-title">👤 Credenciais Admin</p>
-          <p className="info-text">Email: <code>admin@cozidos.com</code></p>
-          <p className="info-text">Senha: <code>admin123</code></p>
-          <p className="info-note">Estas credenciais estão de teste. Mude assim que possível.</p>
-        </div>
+        </form>   
       </div>
     </div>
   )
