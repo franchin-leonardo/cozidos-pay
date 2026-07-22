@@ -68,6 +68,16 @@ Defina as variaveis para os ambientes `Production`, `Preview` e `Development`:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
+Opcional para webhook PagBank:
+
+- `PAGBANK_WEBHOOK_TOKEN`
+
+Opcional para EDI PagBank (Consultar movimentos):
+
+- `PAGBANK_EDI_USER` (numero do estabelecimento)
+- `PAGBANK_EDI_TOKEN` (token especifico da API EDI)
+- `PAGBANK_EDI_AUTH_MODE` (`basic` padrao; use `headers` se seu contrato exigir)
+
 Sem essas variaveis, o app sobe mas nao consegue autenticar nem carregar dados do Supabase.
 
 ## Importar PIX da Nubank via Gmail
