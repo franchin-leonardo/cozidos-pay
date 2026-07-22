@@ -2,10 +2,11 @@ import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { Mail, Lock, LogIn } from 'lucide-react'
 import { useAuthContext } from '../contexts/useAuthContext'
+import logo from '../assets/logo.png'
 import './LoginPage.css'
 
 export function LoginPage() {
-  const { signIn, loading, error } = useAuthContext()
+  const { signIn, signInAsGuest, loading, error } = useAuthContext()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
@@ -21,12 +22,26 @@ export function LoginPage() {
     }
   }
 
+  const handleGuestAccess = async () => {
+    setLoginError(null)
+
+    try {
+      await signInAsGuest()
+    } catch (err: any) {
+      setLoginError(err.message || 'Erro ao entrar como visitante')
+    }
+  }
+
   return (
     <div className="login-page">
       <div className="login-container">
         <div className="login-header">
           <div className="login-logo">
-            <div className="logo-icon">💰</div>
+            <img
+              className="logo-image"
+              src={logo}
+              alt="Logo Cozidos F.C"
+            />
           </div>
           <h1>Cozidos Pay</h1>
           <p>Gerenciador Financeiro</p>
@@ -79,6 +94,15 @@ export function LoginPage() {
                 Entrar
               </>
             )}
+          </button>
+
+          <button
+            type="button"
+            className="login-button guest-button"
+            disabled={loading}
+            onClick={handleGuestAccess}
+          >
+            Entrar como visitante
           </button>
         </form>   
       </div>
