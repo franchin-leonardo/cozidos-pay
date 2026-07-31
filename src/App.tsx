@@ -555,7 +555,10 @@ function App() {
       )
 
       try {
-        const response = await fetch('/api/import-pix', {
+        const importPixEndpoint =
+          import.meta.env.VITE_IMPORT_PIX_ENDPOINT || '/api/import-pix'
+
+        const response = await fetch(importPixEndpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -563,10 +566,22 @@ function App() {
           body: JSON.stringify({ max: 30 }),
         })
 
-        const payload = await response.json().catch(() => null)
+        const rawPayload = await response.text()
+        let payload: { ok?: boolean; error?: string; integrationConfigured?: boolean; result?: any } | null = null
+
+        if (rawPayload) {
+          try {
+            payload = JSON.parse(rawPayload)
+          } catch {
+            payload = null
+          }
+        }
 
         if (!response.ok || !payload?.ok) {
-          throw new Error(payload?.error || 'Não foi possível importar o extrato agora.')
+          throw new Error(
+            payload?.error ||
+              `Não foi possível importar o extrato agora (HTTP ${response.status}).`,
+          )
         }
 
         if (payload?.integrationConfigured === false) {
@@ -589,10 +604,18 @@ function App() {
           `Extrato atualizado: ${inserted} nova(s), ${skipped} ignorada(s).`,
         )
       } catch (error) {
-        const message =
+        let message =
           error instanceof Error
             ? error.message
             : 'Não foi possível atualizar o extrato.'
+
+        if (message === 'Failed to fetch') {
+          message =
+            'Falha de conexão com a API de importação. Em ambiente local, execute com `vercel dev` para habilitar a rota /api/import-pix.'
+        } else if (message.includes('HTTP 404')) {
+          message =
+            'Rota de importação não encontrada (HTTP 404). Em ambiente local, execute com `vercel dev` ou defina `VITE_IMPORT_PIX_ENDPOINT` apontando para uma API válida.'
+        }
 
         setImportStatusMessage(`Falha na sincronização: ${message}`)
       } finally {
