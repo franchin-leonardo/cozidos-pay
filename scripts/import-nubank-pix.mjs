@@ -9,6 +9,12 @@ dotenv.config()
 
 const DEFAULT_FROM = 'todomundo@nubank.com.br'
 const DEFAULT_SUBJECT = 'Você recebeu uma transferência'
+const DEFAULT_SUBJECT_VARIANTS = [
+  'Você recebeu uma transferência',
+  'Você recebeu uma transferência via Pix',
+  'Recebemos sua transferência via Pix',
+  'Pix recebido com sucesso',
+]
 const MONTH_MAP = {
   JAN: 0,
   FEV: 1,
@@ -140,6 +146,9 @@ function parseName(text) {
   const patterns = [
     /transfer[êe]ncia de\s+(.+?)\s+e\s+o\s+valor/i,
     /transfer[êe]ncia de\s+([^\n\r,.]+)/i,
+    /recebeu\s+um\s+pix\s+de\s+(.+?)\s+e\s+o\s+valor/i,
+    /pix\s+de\s+(.+?)\s+e\s+o\s+valor/i,
+    /recebeu\s+um\s+pix\s+de\s+([^\n\r,.]+)/i,
     /de\s+([^\n\r,.]+)\s+via\s+pix/i,
     /recebeu\s+de\s+([^\n\r,.]+)/i,
   ]
@@ -152,6 +161,15 @@ function parseName(text) {
   }
 
   return 'PIX Nubank'
+}
+
+function buildGmailQuery(from, subject) {
+  if (process.env.PIX_GMAIL_SUBJECT) {
+    return `from:${from} subject:"${subject}"`
+  }
+
+  const variantQuery = DEFAULT_SUBJECT_VARIANTS.map((value) => `subject:"${value}"`).join(' OR ')
+  return `from:${from} (${variantQuery})`
 }
 
 function parseDateFromBody(text, fallbackIso) {
@@ -248,10 +266,11 @@ export async function runGmailPixImport(options = {}) {
 
     const from = process.env.PIX_GMAIL_FROM || DEFAULT_FROM
     const subject = process.env.PIX_GMAIL_SUBJECT || DEFAULT_SUBJECT
+    const query = buildGmailQuery(from, subject)
 
     const { data: listData } = await gmail.users.messages.list({
       userId: 'me',
-      q: `from:${from} subject:"${subject}"`,
+      q: query,
       maxResults: args.max,
     })
 
