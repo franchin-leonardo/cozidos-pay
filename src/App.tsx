@@ -1599,7 +1599,7 @@ function App() {
                     <article
                       className={`movement-row ${
                         draggedMovementId === movement.id ? 'dragging' : ''
-                      }`}
+                      } ${!assignedExpense ? 'unallocated' : ''}`}
                       draggable={!isGuest}
                       onDragEnd={() => setDraggedMovementId(null)}
                       onDragStart={(event) => handleMovementDragStart(event, movement.id)}
@@ -1620,6 +1620,11 @@ function App() {
                         {movement.description && (
                           <small className="movement-detail">
                             Descrição: {movement.description}
+                          </small>
+                        )}
+                        {!assignedExpense && (
+                          <small className="movement-allocation-tag">
+                            Não alocada
                           </small>
                         )}
                         {assignedExpense && <small>Alocada em {assignedExpense.name}</small>}
