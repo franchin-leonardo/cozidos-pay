@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type DragEvent,
   type FormEvent,
   useCallback,
@@ -44,6 +45,7 @@ type MovementType = 'entrada' | 'saida'
 type Movement = {
   id: string
   name: string
+  description?: string
   amount: number
   type: MovementType
   date: string
@@ -65,6 +67,11 @@ type CounterpartyEntry = {
   description: string
   amount: number
   type: CounterpartyType
+}
+
+type SplitPartDraft = {
+  description: string
+  amount: string
 }
 
 const initialMovements: Movement[] = [
@@ -148,6 +155,43 @@ function parseCurrencyInput(value: string) {
   return Number(value.replace(/\./g, '').replace(',', '.'))
 }
 
+function parseFlexibleCurrencyInput(value: string) {
+  const raw = String(value ?? '').trim().replace(/\s/g, '')
+  if (!raw) {
+    return Number.NaN
+  }
+
+  if (raw.includes(',')) {
+    return Number(raw.replace(/\./g, '').replace(',', '.'))
+  }
+
+  return Number(raw.replace(',', '.'))
+}
+
+function toCurrencyInput(value: number) {
+  return value.toFixed(2).replace('.', ',')
+}
+
+function buildSplitDraftParts(totalAmount: number, partsCount: number) {
+  const parts: SplitPartDraft[] = []
+  let remaining = Number(totalAmount.toFixed(2))
+
+  for (let index = 0; index < partsCount; index += 1) {
+    const isLastPart = index === partsCount - 1
+    const partAmount = isLastPart
+      ? Number(remaining.toFixed(2))
+      : Number((remaining / (partsCount - index)).toFixed(2))
+
+    remaining = Number((remaining - partAmount).toFixed(2))
+    parts.push({
+      description: `Parte ${index + 1}/${partsCount}`,
+      amount: toCurrencyInput(partAmount),
+    })
+  }
+
+  return parts
+}
+
 function getCurrentLocalDateTime() {
   const now = new Date()
   const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
@@ -163,7 +207,14 @@ function getCurrentLocalDateTime() {
 
 function App() {
   const { isGuest, isAdmin } = useAuthContext()
-  const { movements, reloadMovements, addNewMovement, removeMovement } = useMovements(initialMovements)
+  const {
+    movements,
+    reloadMovements,
+    addNewMovement,
+    removeMovement,
+    updateMovementDescription,
+    splitMovement,
+  } = useMovements(initialMovements)
   const {
     expenses,
     addNewExpense: addNewExpenseToSupabase,
@@ -212,6 +263,16 @@ function App() {
   const [dragOverExpenseId, setDragOverExpenseId] = useState<string | null>(null)
   const [isImportingMovements, setIsImportingMovements] = useState(false)
   const [importStatusMessage, setImportStatusMessage] = useState('')
+  const [splitMovementId, setSplitMovementId] = useState<string | null>(null)
+  const [splitPartsCountInput, setSplitPartsCountInput] = useState('2')
+  const [splitDraftParts, setSplitDraftParts] = useState<SplitPartDraft[]>([])
+  const [splitErrorMessage, setSplitErrorMessage] = useState('')
+  const [isSubmittingSplit, setIsSubmittingSplit] = useState(false)
+  const [editDescriptionMovementId, setEditDescriptionMovementId] = useState<string | null>(null)
+  const [editDescriptionDraft, setEditDescriptionDraft] = useState('')
+  const [isSubmittingEditDescription, setIsSubmittingEditDescription] = useState(false)
+  const [deleteMovementId, setDeleteMovementId] = useState<string | null>(null)
+  const [isSubmittingDeleteMovement, setIsSubmittingDeleteMovement] = useState(false)
   const hasTriggeredAutoImport = useRef(false)
 
   const filteredMovements = movements.filter((movement) => {
@@ -481,25 +542,216 @@ function App() {
       return
     }
 
-    const confirmed = window.confirm(
-      `Tem certeza que deseja remover a movimentação "${movement.name}" no valor de ${currencyFormatter.format(
-        movement.amount,
-      )}?`,
-    )
-
-    if (!confirmed) {
+    if (deleteMovementId === movement.id) {
+      setDeleteMovementId(null)
       return
     }
+
+    setSplitErrorMessage('')
+    setSplitMovementId(null)
+    setEditDescriptionMovementId(null)
+    setDeleteMovementId(movement.id)
+  }
+
+  async function confirmRemoveMovementEntry(movement: Movement) {
+    if (!isAdmin) {
+      return
+    }
+
+    setIsSubmittingDeleteMovement(true)
 
     try {
       await removeMovement(movement.id)
       setManualMovementMessage('Movimentação removida com sucesso.')
+      setDeleteMovementId(null)
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : 'Não foi possível remover a movimentação.'
       setManualMovementMessage(`Falha ao remover: ${message}`)
+    } finally {
+      setIsSubmittingDeleteMovement(false)
+    }
+  }
+
+  async function editMovementDescriptionEntry(movement: Movement) {
+    if (!isAdmin) {
+      return
+    }
+
+    if (editDescriptionMovementId === movement.id) {
+      setEditDescriptionMovementId(null)
+      setEditDescriptionDraft('')
+      return
+    }
+
+    setSplitErrorMessage('')
+    setSplitMovementId(null)
+    setDeleteMovementId(null)
+    setEditDescriptionMovementId(movement.id)
+    setEditDescriptionDraft(movement.description || '')
+  }
+
+  async function submitEditMovementDescriptionForm(
+    event: FormEvent<HTMLFormElement>,
+    movement: Movement,
+  ) {
+    event.preventDefault()
+
+    if (!isAdmin) {
+      return
+    }
+
+    setIsSubmittingEditDescription(true)
+
+    try {
+      await updateMovementDescription(movement.id, editDescriptionDraft)
+      setManualMovementMessage('Descrição atualizada com sucesso.')
+      setEditDescriptionMovementId(null)
+      setEditDescriptionDraft('')
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível atualizar a descrição.'
+      setManualMovementMessage(`Falha ao atualizar descrição: ${message}`)
+    } finally {
+      setIsSubmittingEditDescription(false)
+    }
+  }
+
+  function closeSplitCard() {
+    setSplitMovementId(null)
+    setSplitPartsCountInput('2')
+    setSplitDraftParts([])
+    setSplitErrorMessage('')
+    setIsSubmittingSplit(false)
+  }
+
+  function openSplitCard(movement: Movement) {
+    const defaultCount = 2
+    setEditDescriptionMovementId(null)
+    setDeleteMovementId(null)
+    setSplitMovementId(movement.id)
+    setSplitPartsCountInput(String(defaultCount))
+    setSplitDraftParts(buildSplitDraftParts(movement.amount, defaultCount))
+    setSplitErrorMessage('')
+  }
+
+  function handleSplitPartsCountChange(movement: Movement, rawValue: string) {
+    const nextCount = Number(rawValue)
+    setSplitPartsCountInput(rawValue)
+
+    if (!Number.isInteger(nextCount) || nextCount < 2 || nextCount > 10) {
+      return
+    }
+
+    setSplitDraftParts(buildSplitDraftParts(movement.amount, nextCount))
+    setSplitErrorMessage('')
+  }
+
+  function updateSplitDraftPart(index: number, field: 'description' | 'amount', value: string) {
+    setSplitDraftParts((currentParts) =>
+      currentParts.map((part, partIndex) =>
+        partIndex === index
+          ? {
+              ...part,
+              [field]: value,
+            }
+          : part,
+      ),
+    )
+  }
+
+  async function splitMovementEntry(movement: Movement, assignedExpense?: Expense) {
+    if (!isAdmin) {
+      return
+    }
+
+    if (assignedExpense) {
+      setManualMovementMessage(
+        `Remova a alocação em ${assignedExpense.name} antes de dividir esta movimentação.`,
+      )
+      return
+    }
+
+    if (splitMovementId === movement.id) {
+      closeSplitCard()
+      return
+    }
+
+    openSplitCard(movement)
+  }
+
+  async function submitSplitMovementForm(event: FormEvent<HTMLFormElement>, movement: Movement) {
+    event.preventDefault()
+
+    const partsCount = Number(splitPartsCountInput)
+    if (!Number.isInteger(partsCount) || partsCount < 2 || partsCount > 10) {
+      setSplitErrorMessage('Informe um número de partes entre 2 e 10.')
+      return
+    }
+
+    if (splitDraftParts.length !== partsCount) {
+      setSplitErrorMessage('Ajuste a quantidade de partes antes de confirmar.')
+      return
+    }
+
+    const parsedParts = splitDraftParts.map((part, index) => {
+      const parsedAmount = parseFlexibleCurrencyInput(part.amount)
+      return {
+        index,
+        description: part.description.trim() || `Parte ${index + 1}/${partsCount}`,
+        amount: parsedAmount,
+      }
+    })
+
+    const hasInvalidAmount = parsedParts.some(
+      (part) => !Number.isFinite(part.amount) || part.amount <= 0,
+    )
+    if (hasInvalidAmount) {
+      setSplitErrorMessage('Todos os valores devem ser numéricos e maiores que zero.')
+      return
+    }
+
+    const totalParts = Number(
+      parsedParts.reduce((sum, part) => sum + Number(part.amount), 0).toFixed(2),
+    )
+    const totalMovement = Number(movement.amount.toFixed(2))
+
+    if (Math.abs(totalParts - totalMovement) > 0.01) {
+      setSplitErrorMessage(
+        `A soma das partes (${currencyFormatter.format(
+          totalParts,
+        )}) precisa ser igual ao valor da movimentação (${currencyFormatter.format(totalMovement)}).`,
+      )
+      return
+    }
+
+    setIsSubmittingSplit(true)
+    setSplitErrorMessage('')
+
+    try {
+      await splitMovement(
+        movement.id,
+        parsedParts.map((part, index) => ({
+          name: `${movement.name} (${index + 1}/${partsCount})`,
+          description: part.description,
+          amount: Number(part.amount.toFixed(2)),
+        })),
+      )
+
+      setManualMovementMessage('Movimentação dividida com sucesso.')
+      closeSplitCard()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível dividir a movimentação.'
+      setSplitErrorMessage(message)
+    } finally {
+      setIsSubmittingSplit(false)
     }
   }
 
@@ -1338,48 +1590,233 @@ function App() {
                 const assignedExpense = expenses.find((expense) =>
                   expense.movementIds.includes(movement.id),
                 )
+                const isSplitOpen = splitMovementId === movement.id
+                const isEditDescriptionOpen = editDescriptionMovementId === movement.id
+                const isDeleteOpen = deleteMovementId === movement.id
 
                 return (
-                  <article
-                    className={`movement-row ${
-                      draggedMovementId === movement.id ? 'dragging' : ''
-                    }`}
-                    draggable={!isGuest}
-                    key={movement.id}
-                    onDragEnd={() => setDraggedMovementId(null)}
-                    onDragStart={(event) => handleMovementDragStart(event, movement.id)}
-                  >
-                    <GripVertical className="drag-handle" size={18} aria-hidden="true" />
-                    <div className={`movement-badge ${movement.type}`}>
-                      {movement.type === 'entrada' ? (
-                        <ArrowDownLeft size={18} aria-hidden="true" />
-                      ) : (
-                        <ArrowUpRight size={18} aria-hidden="true" />
+                  <Fragment key={movement.id}>
+                    <article
+                      className={`movement-row ${
+                        draggedMovementId === movement.id ? 'dragging' : ''
+                      }`}
+                      draggable={!isGuest}
+                      onDragEnd={() => setDraggedMovementId(null)}
+                      onDragStart={(event) => handleMovementDragStart(event, movement.id)}
+                    >
+                      <GripVertical className="drag-handle" size={18} aria-hidden="true" />
+                      <div className={`movement-badge ${movement.type}`}>
+                        {movement.type === 'entrada' ? (
+                          <ArrowDownLeft size={18} aria-hidden="true" />
+                        ) : (
+                          <ArrowUpRight size={18} aria-hidden="true" />
+                        )}
+                      </div>
+                      <div className="movement-main">
+                        <strong>{movement.name}</strong>
+                        <span>
+                          {formatDate(movement.date)} · {movement.time}
+                        </span>
+                        {movement.description && (
+                          <small className="movement-detail">
+                            Descrição: {movement.description}
+                          </small>
+                        )}
+                        {assignedExpense && <small>Alocada em {assignedExpense.name}</small>}
+                      </div>
+                      <strong className={`movement-value ${movement.type}`}>
+                        {formatCurrency(movement.amount, movement.type)}
+                      </strong>
+                      {isAdmin && (
+                        <div className="movement-row-actions">
+                          <button
+                            className="icon-action"
+                            type="button"
+                            aria-label={`Dividir movimentação ${movement.name}`}
+                            onClick={() => splitMovementEntry(movement, assignedExpense)}
+                          >
+                            <Link2 size={16} aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-action"
+                            type="button"
+                            aria-label={`Editar descrição de ${movement.name}`}
+                            onClick={() => editMovementDescriptionEntry(movement)}
+                          >
+                            <Pencil size={16} aria-hidden="true" />
+                          </button>
+                          <button
+                            className="icon-action danger"
+                            type="button"
+                            aria-label={`Remover movimentação ${movement.name}`}
+                            onClick={() => removeMovementEntry(movement)}
+                          >
+                            <Trash2 size={16} aria-hidden="true" />
+                          </button>
+                        </div>
                       )}
-                    </div>
-                    <div className="movement-main">
-                      <strong>{movement.name}</strong>
-                      <span>
-                        {formatDate(movement.date)} · {movement.time}
-                      </span>
-                      {assignedExpense && <small>Alocada em {assignedExpense.name}</small>}
-                    </div>
-                    <strong className={`movement-value ${movement.type}`}>
-                      {formatCurrency(movement.amount, movement.type)}
-                    </strong>
-                    {isAdmin && (
-                      <div className="movement-row-actions">
-                        <button
-                          className="icon-action danger"
-                          type="button"
-                          aria-label={`Remover movimentação ${movement.name}`}
-                          onClick={() => removeMovementEntry(movement)}
-                        >
-                          <Trash2 size={16} aria-hidden="true" />
-                        </button>
+                    </article>
+
+                    {isAdmin && isSplitOpen && (
+                      <form
+                        className="movement-split-card"
+                        onSubmit={(event) => submitSplitMovementForm(event, movement)}
+                      >
+                        <div className="movement-split-header">
+                          <strong>
+                            Dividir {movement.name} ({currencyFormatter.format(movement.amount)})
+                          </strong>
+                          <button
+                            className="icon-action muted"
+                            type="button"
+                            aria-label="Fechar divisão"
+                            onClick={closeSplitCard}
+                          >
+                            <X size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+
+                        <label className="field split-parts-field">
+                          <span>Quantidade de partes (2 a 10)</span>
+                          <div>
+                            <input
+                              type="number"
+                              min={2}
+                              max={10}
+                              value={splitPartsCountInput}
+                              onChange={(event) =>
+                                handleSplitPartsCountChange(movement, event.target.value)
+                              }
+                              disabled={isSubmittingSplit}
+                            />
+                          </div>
+                        </label>
+
+                        <div className="movement-split-parts-grid">
+                          {splitDraftParts.map((part, index) => (
+                            <div className="movement-split-part-row" key={`${movement.id}-part-${index}`}>
+                              <label className="field">
+                                <span>Descrição da parte {index + 1}</span>
+                                <div>
+                                  <input
+                                    type="text"
+                                    value={part.description}
+                                    onChange={(event) =>
+                                      updateSplitDraftPart(index, 'description', event.target.value)
+                                    }
+                                    disabled={isSubmittingSplit}
+                                  />
+                                </div>
+                              </label>
+                              <label className="field">
+                                <span>Valor</span>
+                                <div>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={part.amount}
+                                    onChange={(event) =>
+                                      updateSplitDraftPart(index, 'amount', event.target.value)
+                                    }
+                                    disabled={isSubmittingSplit}
+                                  />
+                                </div>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+
+                        {splitErrorMessage && (
+                          <p className="manual-movement-message split-error-message">
+                            {splitErrorMessage}
+                          </p>
+                        )}
+
+                        <div className="movement-split-actions">
+                          <button className="ghost-action" type="button" onClick={closeSplitCard}>
+                            Cancelar
+                          </button>
+                          <button className="primary-action" type="submit" disabled={isSubmittingSplit}>
+                            {isSubmittingSplit ? 'Dividindo...' : 'Confirmar divisão'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {isAdmin && isEditDescriptionOpen && (
+                      <form
+                        className="movement-edit-card"
+                        onSubmit={(event) => submitEditMovementDescriptionForm(event, movement)}
+                      >
+                        <div className="movement-split-header">
+                          <strong>Editar descrição de {movement.name}</strong>
+                        </div>
+
+                        <label className="field">
+                          <span>Descrição</span>
+                          <div>
+                            <input
+                              type="text"
+                              value={editDescriptionDraft}
+                              onChange={(event) => setEditDescriptionDraft(event.target.value)}
+                              disabled={isSubmittingEditDescription}
+                            />
+                          </div>
+                        </label>
+
+                        <div className="movement-split-actions">
+                          <button
+                            className="ghost-action"
+                            type="button"
+                            onClick={() => {
+                              setEditDescriptionMovementId(null)
+                              setEditDescriptionDraft('')
+                            }}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            className="primary-action"
+                            type="submit"
+                            disabled={isSubmittingEditDescription}
+                          >
+                            {isSubmittingEditDescription ? 'Salvando...' : 'Salvar descrição'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {isAdmin && isDeleteOpen && (
+                      <div className="movement-delete-card">
+                        <div className="movement-split-header">
+                          <strong>
+                            Confirmar exclusão de {movement.name} ({currencyFormatter.format(
+                              movement.amount,
+                            )})
+                          </strong>
+                        </div>
+
+                        <div className="movement-split-actions">
+                          <button
+                            className="ghost-action"
+                            type="button"
+                            onClick={() => setDeleteMovementId(null)}
+                            disabled={isSubmittingDeleteMovement}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            className="primary-action danger"
+                            type="button"
+                            onClick={() => confirmRemoveMovementEntry(movement)}
+                            disabled={isSubmittingDeleteMovement}
+                          >
+                            {isSubmittingDeleteMovement ? 'Removendo...' : 'Confirmar exclusão'}
+                          </button>
+                        </div>
                       </div>
                     )}
-                  </article>
+                  </Fragment>
                 )
               })}
 

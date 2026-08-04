@@ -2,6 +2,7 @@
 CREATE TABLE movements (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
+  description TEXT,
   amount NUMERIC(12, 2) NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('entrada', 'saida')),
   date DATE NOT NULL,

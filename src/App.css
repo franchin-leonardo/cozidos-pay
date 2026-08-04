@@ -967,6 +967,14 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.movement-main .movement-detail {
+  overflow: visible;
+  text-overflow: initial;
+  white-space: normal;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
 .drag-handle {
   color: #a9b5ae;
 }
@@ -980,6 +988,73 @@ input:focus-visible {
 .movement-row-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.movement-split-card {
+  display: grid;
+  gap: 12px;
+  margin: 0 18px 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.movement-edit-card,
+.movement-delete-card {
+  display: grid;
+  gap: 12px;
+  margin: 0 18px 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfdfb;
+}
+
+.movement-split-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.movement-split-header strong {
+  color: var(--text-strong);
+}
+
+.split-parts-field {
+  max-width: 240px;
+}
+
+.movement-split-parts-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.movement-split-part-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 10px;
+}
+
+.movement-split-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.split-error-message {
+  color: #b44232;
+}
+
+.primary-action.danger {
+  color: #ffffff;
+  background: #c94e3d;
+  box-shadow: 0 12px 28px rgba(180, 66, 50, 0.28);
+}
+
+.primary-action.danger:hover {
+  background: #b44232;
 }
 
 .entrada {
@@ -1074,6 +1149,10 @@ input:focus-visible {
   }
 
   .movement-form-inline {
+    grid-template-columns: 1fr;
+  }
+
+  .movement-split-part-row {
     grid-template-columns: 1fr;
   }
 

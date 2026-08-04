@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 export interface Movement {
   id: string
   name: string
+  description?: string | null
   amount: number
   type: 'entrada' | 'saida'
   date: string
@@ -68,8 +69,17 @@ export async function updateMovement(id: string, updates: Partial<Movement>) {
     .select()
 
   if (error) {
+    const isDescriptionUpdate = Object.prototype.hasOwnProperty.call(updates, 'description')
+    const errorMessage = String(error.message || '').toLowerCase()
+
+    if (isDescriptionUpdate && errorMessage.includes('description') && errorMessage.includes('does not exist')) {
+      throw new Error(
+        'A coluna description não existe na tabela movements. Execute o SQL de migração: ALTER TABLE movements ADD COLUMN IF NOT EXISTS description TEXT;',
+      )
+    }
+
     console.error('Erro ao atualizar movimentação:', error)
-    return null
+    throw new Error(error.message || 'Não foi possível atualizar movimentação.')
   }
   return data?.[0] || null
 }
