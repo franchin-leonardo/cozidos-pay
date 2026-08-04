@@ -186,8 +186,9 @@ function App() {
   const [planningView, setPlanningView] = useState<
     'planejamento' | 'devedores_credores'
   >('planejamento')
-  const [isPlanningCollapsed, setIsPlanningCollapsed] = useState(false)
+  const [isPlanningCollapsed, setIsPlanningCollapsed] = useState(true)
   const [isStatementCollapsed, setIsStatementCollapsed] = useState(false)
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true)
 
   const [expenseName, setExpenseName] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
@@ -1126,8 +1127,17 @@ function App() {
             }`}
             aria-hidden={isStatementCollapsed}
           >
-            <section className="content-layout">
-              <aside className="filters-panel" aria-label="Filtros de movimentações">
+            <section
+              className={`content-layout ${
+                isFiltersCollapsed ? 'filters-collapsed' : ''
+              }`}
+            >
+              <aside
+                id="statement-filters-panel"
+                className={`filters-panel ${isFiltersCollapsed ? 'collapsed' : 'expanded'}`}
+                aria-label="Filtros de movimentações"
+                aria-hidden={isFiltersCollapsed}
+              >
                 <div className="panel-title">
                   <SlidersHorizontal size={18} aria-hidden="true" />
                   <h2>Filtros</h2>
@@ -1200,13 +1210,31 @@ function App() {
               <section className="movements-panel" aria-label="Lista de movimentações">
             <div className="movements-header">
               <div>
-                <h2>Extrato</h2>
                 <p>{filteredMovements.length} movimentações encontradas</p>
                 {importStatusMessage && (
                   <p className="import-status-message">{importStatusMessage}</p>
                 )}
               </div>
               <div className="movements-actions">
+                <button
+                  className="ghost-action"
+                  type="button"
+                  onClick={() => setIsFiltersCollapsed((current) => !current)}
+                  aria-expanded={!isFiltersCollapsed}
+                  aria-controls="statement-filters-panel"
+                >
+                  {isFiltersCollapsed ? (
+                    <>
+                      <ChevronDown size={17} aria-hidden="true" />
+                      Expandir filtros
+                    </>
+                  ) : (
+                    <>
+                      <ChevronUp size={17} aria-hidden="true" />
+                      Minimizar filtros
+                    </>
+                  )}
+                </button>
                 {isAdmin && (
                   <button
                     className="ghost-action"
@@ -1233,10 +1261,6 @@ function App() {
 
             {isAdmin && (
               <section className="manual-movement-panel" aria-label="Lançamento manual em dinheiro">
-                <div className="manual-movement-panel-header">
-                  <h3>Dinheiro manual</h3>
-                </div>
-
                 <form className="movement-form movement-form-inline" onSubmit={addManualMovement}>
                   <label className="field search-field">
                     <span>Descrição</span>

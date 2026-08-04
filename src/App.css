@@ -203,7 +203,7 @@ input:focus-visible {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: var(--shadow-soft);
-  order: 3;
+  order: 2;
 }
 
 .section-accordion-bar {
@@ -227,7 +227,7 @@ input:focus-visible {
 
 .statement-accordion-shell {
   margin-bottom: 18px;
-  order: 2;
+  order: 3;
 }
 
 .planning-accordion-content {
@@ -675,6 +675,10 @@ input:focus-visible {
   align-items: start;
 }
 
+.content-layout.filters-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .filters-panel,
 .movements-panel {
   border: 1px solid var(--border);
@@ -687,6 +691,25 @@ input:focus-visible {
   display: grid;
   gap: 18px;
   padding: 18px;
+  overflow: hidden;
+  transition:
+    max-height 240ms ease,
+    opacity 180ms ease,
+    padding 180ms ease;
+}
+
+.filters-panel.expanded {
+  max-height: 1200px;
+  opacity: 1;
+}
+
+.filters-panel.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  pointer-events: none;
 }
 
 .panel-title,

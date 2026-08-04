@@ -9,11 +9,13 @@ dotenv.config()
 
 const DEFAULT_FROM = 'todomundo@nubank.com.br'
 const DEFAULT_SUBJECT = 'Você recebeu uma transferência'
+const DEFAULT_SELF_PIX_NAME = 'Leonardo Franchin Leite'
 const DEFAULT_SUBJECT_VARIANTS = [
   'Você recebeu uma transferência',
   'Você recebeu uma transferência via Pix',
   'Recebemos sua transferência via Pix',
   'Pix recebido com sucesso',
+  'Sua transferência via Pix já chegou',
 ]
 const MONTH_MAP = {
   JAN: 0,
@@ -142,7 +144,18 @@ function parseAmount(text) {
   return Number.isFinite(amount) ? amount : null
 }
 
-function parseName(text) {
+function parseName(text, selfPixName) {
+  const selfTransferPatterns = [
+    /sua\s+transfer[êe]ncia\s+via\s+pix\s+j[aá]\s+chegou/i,
+    /recebemos\s+sua\s+transfer[êe]ncia\s+via\s+pix/i,
+  ]
+
+  for (const pattern of selfTransferPatterns) {
+    if (pattern.test(text)) {
+      return selfPixName
+    }
+  }
+
   const patterns = [
     /transfer[êe]ncia de\s+(.+?)\s+e\s+o\s+valor/i,
     /transfer[êe]ncia de\s+([^\n\r,.]+)/i,
@@ -164,11 +177,16 @@ function parseName(text) {
 }
 
 function buildGmailQuery(from, subject) {
+  const uniqueSubjects = Array.from(new Set([subject, ...DEFAULT_SUBJECT_VARIANTS]))
+
   if (process.env.PIX_GMAIL_SUBJECT) {
-    return `from:${from} subject:"${subject}"`
+    const configuredAndKnownVariants = uniqueSubjects
+      .map((value) => `subject:"${value}"`)
+      .join(' OR ')
+    return `from:${from} (${configuredAndKnownVariants})`
   }
 
-  const variantQuery = DEFAULT_SUBJECT_VARIANTS.map((value) => `subject:"${value}"`).join(' OR ')
+  const variantQuery = uniqueSubjects.map((value) => `subject:"${value}"`).join(' OR ')
   return `from:${from} (${variantQuery})`
 }
 
@@ -266,6 +284,7 @@ export async function runGmailPixImport(options = {}) {
 
     const from = process.env.PIX_GMAIL_FROM || DEFAULT_FROM
     const subject = process.env.PIX_GMAIL_SUBJECT || DEFAULT_SUBJECT
+    const selfPixName = process.env.PIX_SELF_NAME || DEFAULT_SELF_PIX_NAME
     const query = buildGmailQuery(from, subject)
 
     const { data: listData } = await gmail.users.messages.list({
@@ -299,7 +318,7 @@ export async function runGmailPixImport(options = {}) {
         continue
       }
 
-      const name = parseName(messageText)
+      const name = parseName(messageText, selfPixName)
       const internalDate = message.internalDate
         ? new Date(Number(message.internalDate)).toISOString()
         : new Date().toISOString()
