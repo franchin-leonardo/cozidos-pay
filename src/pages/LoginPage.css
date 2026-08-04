@@ -46,6 +46,12 @@
   justify-content: center;
 }
 
+.logo-image {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+
 .login-header h1 {
   font-size: 28px;
   color: var(--text-strong);
@@ -161,6 +167,18 @@
   cursor: not-allowed;
 }
 
+.guest-button {
+  margin-top: 10px;
+  background: #ffffff;
+  color: var(--green-strong);
+  border: 1px solid var(--green-border);
+}
+
+.guest-button:hover:not(:disabled) {
+  background: #f0fff4;
+  box-shadow: none;
+}
+
 .spinner {
   display: inline-block;
   width: 16px;
@@ -231,3 +249,4 @@
     margin-bottom: 24px;
   }
 }
+

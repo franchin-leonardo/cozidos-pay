@@ -7,8 +7,10 @@ export type AuthContextType = {
   error: string | null
   isAuthenticated: boolean
   isAdmin: boolean
+  isGuest: boolean
   signUp: (email: string, password: string, role?: 'admin' | 'user') => Promise<any>
   signIn: (email: string, password: string) => Promise<any>
+  signInAsGuest: () => Promise<void>
   signOut: () => Promise<void>
 }
 

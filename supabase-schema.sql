@@ -29,17 +29,30 @@ CREATE TABLE movement_allocations (
   UNIQUE(movement_id, expense_id)
 );
 
+-- Tabela de devedores e credores
+CREATE TABLE counterparty_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  amount NUMERIC(12, 2) NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('devedor', 'credor')),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Índices para performance
 CREATE INDEX movements_date_idx ON movements(date DESC);
 CREATE INDEX movements_type_idx ON movements(type);
 CREATE INDEX expenses_status_idx ON expenses(status);
 CREATE INDEX allocations_expense_idx ON movement_allocations(expense_id);
 CREATE INDEX allocations_movement_idx ON movement_allocations(movement_id);
+CREATE INDEX counterparty_events_type_idx ON counterparty_events(type);
+CREATE INDEX counterparty_events_created_at_idx ON counterparty_events(created_at DESC);
 
 -- Ativar RLS (Row Level Security)
 ALTER TABLE movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movement_allocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE counterparty_events ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS (permitir acesso a todos por enquanto, você pode configurar melhor depois)
 CREATE POLICY "Allow all access to movements" ON movements
@@ -49,4 +62,7 @@ CREATE POLICY "Allow all access to expenses" ON expenses
   FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all access to allocations" ON movement_allocations
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all access to counterparty_events" ON counterparty_events
   FOR ALL USING (true) WITH CHECK (true);

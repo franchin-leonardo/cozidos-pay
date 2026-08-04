@@ -25,6 +25,15 @@ export interface MovementAllocation {
   created_at: string
 }
 
+export interface CounterpartyEvent {
+  id: string
+  name: string
+  description: string
+  amount: number
+  type: 'devedor' | 'credor'
+  created_at: string
+}
+
 // ============ MOVEMENTS ============
 
 export async function getMovements() {
@@ -163,6 +172,49 @@ export async function deallocateMovement(allocationId: string) {
 
   if (error) {
     console.error('Erro ao desalocar movimentação:', error)
+    return false
+  }
+  return true
+}
+
+// ============ COUNTERPARTY EVENTS ============
+
+export async function getCounterpartyEvents() {
+  const { data, error } = await supabase
+    .from('counterparty_events')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar devedores/credores:', error)
+    return []
+  }
+  return data || []
+}
+
+export async function addCounterpartyEvent(
+  event: Omit<CounterpartyEvent, 'id' | 'created_at'>,
+) {
+  const { data, error } = await supabase
+    .from('counterparty_events')
+    .insert([{ ...event, created_at: new Date().toISOString() }])
+    .select()
+
+  if (error) {
+    console.error('Erro ao adicionar devedor/credor:', error)
+    return null
+  }
+  return data?.[0] || null
+}
+
+export async function deleteCounterpartyEvent(id: string) {
+  const { error } = await supabase
+    .from('counterparty_events')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Erro ao remover devedor/credor:', error)
     return false
   }
   return true
