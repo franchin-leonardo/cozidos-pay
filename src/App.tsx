@@ -163,7 +163,7 @@ function getCurrentLocalDateTime() {
 
 function App() {
   const { isGuest, isAdmin } = useAuthContext()
-  const { movements, reloadMovements, addNewMovement } = useMovements(initialMovements)
+  const { movements, reloadMovements, addNewMovement, removeMovement } = useMovements(initialMovements)
   const {
     expenses,
     addNewExpense: addNewExpenseToSupabase,
@@ -475,6 +475,33 @@ function App() {
     }
   }
 
+  async function removeMovementEntry(movement: Movement) {
+    if (!isAdmin) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Tem certeza que deseja remover a movimentação "${movement.name}" no valor de ${currencyFormatter.format(
+        movement.amount,
+      )}?`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await removeMovement(movement.id)
+      setManualMovementMessage('Movimentação removida com sucesso.')
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível remover a movimentação.'
+      setManualMovementMessage(`Falha ao remover: ${message}`)
+    }
+  }
+
   function handleMovementDragStart(event: DragEvent<HTMLElement>, movementId: string) {
     if (isGuest) {
       return
@@ -658,6 +685,10 @@ function App() {
         </header>
 
         <section className="summary-grid" aria-label="Resumo financeiro">
+          <article className="summary-panel saldo">
+            <span>Saldo do período</span>
+            <strong>{currencyFormatter.format(totals.entrada - totals.saida)}</strong>
+          </article>
           <article className="summary-panel entrada">
             <span>Entradas</span>
             <strong>{currencyFormatter.format(totals.entrada)}</strong>
@@ -665,10 +696,6 @@ function App() {
           <article className="summary-panel saida">
             <span>Saídas</span>
             <strong>{currencyFormatter.format(totals.saida)}</strong>
-          </article>
-          <article className="summary-panel saldo">
-            <span>Saldo do período</span>
-            <strong>{currencyFormatter.format(totals.entrada - totals.saida)}</strong>
           </article>
         </section>
 
@@ -1316,6 +1343,18 @@ function App() {
                     <strong className={`movement-value ${movement.type}`}>
                       {formatCurrency(movement.amount, movement.type)}
                     </strong>
+                    {isAdmin && (
+                      <div className="movement-row-actions">
+                        <button
+                          className="icon-action danger"
+                          type="button"
+                          aria-label={`Remover movimentação ${movement.name}`}
+                          onClick={() => removeMovementEntry(movement)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                    )}
                   </article>
                 )
               })}

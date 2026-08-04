@@ -10,6 +10,20 @@ export type Movement = {
   time: string
 }
 
+function normalizeMovementName(name: string) {
+  return String(name ?? '').trim().toLowerCase()
+}
+
+function movementKey(movement: Omit<Movement, 'id'>) {
+  return [
+    normalizeMovementName(movement.name),
+    Number(movement.amount).toFixed(2),
+    movement.type,
+    movement.date,
+    movement.time,
+  ].join('|')
+}
+
 export function useMovements(initialData: Movement[]) {
   const [movements, setMovements] = useState<Movement[]>(initialData)
   const [loading, setLoading] = useState(true)
@@ -28,7 +42,17 @@ export function useMovements(initialData: Movement[]) {
         date: m.date,
         time: m.time,
       }))
-      setMovements(mapped)
+
+      // Evita renderizar movimentações repetidas quando já existem duplicadas no banco.
+      const uniqueMovements = new Map<string, Movement>()
+      for (const movement of mapped) {
+        const key = movementKey(movement)
+        if (!uniqueMovements.has(key)) {
+          uniqueMovements.set(key, movement)
+        }
+      }
+
+      setMovements(Array.from(uniqueMovements.values()))
       setError(null)
     } catch (err) {
       console.error('Erro ao carregar movimentações:', err)
@@ -45,6 +69,12 @@ export function useMovements(initialData: Movement[]) {
 
   const addNewMovement = async (movement: Omit<Movement, 'id'>) => {
     try {
+      const newMovementKey = movementKey(movement)
+      const isDuplicate = movements.some((item) => movementKey(item) === newMovementKey)
+      if (isDuplicate) {
+        throw new Error('Já existe uma movimentação igual no extrato.')
+      }
+
       // Otimistic update
       const tempId = `temp-${Date.now()}`
       const tempMovement = { ...movement, id: tempId } as Movement
@@ -64,6 +94,9 @@ export function useMovements(initialData: Movement[]) {
         setMovements((prev) =>
           prev.map((m) => (m.id === tempId ? { ...result, amount: Number(result.amount) } : m)),
         )
+      } else {
+        setMovements((prev) => prev.filter((m) => m.id !== tempId))
+        throw new Error('Não foi possível salvar a movimentação.')
       }
       return result
     } catch (err) {

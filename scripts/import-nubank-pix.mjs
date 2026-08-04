@@ -323,7 +323,6 @@ export async function runGmailPixImport(options = {}) {
         const { data: existing, error: findError } = await supabase
           .from('movements')
           .select('id')
-          .eq('name', movement.name)
           .eq('amount', movement.amount)
           .eq('type', movement.type)
           .eq('date', movement.date)
