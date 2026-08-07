@@ -35,6 +35,16 @@ export interface CounterpartyEvent {
   created_at: string
 }
 
+export interface ConfirmedPaymentClient {
+  id: string
+  client_number: number
+  name: string
+  amount: number
+  paid: boolean
+  created_at: string
+  updated_at: string
+}
+
 // ============ MOVEMENTS ============
 
 export async function getMovements() {
@@ -225,6 +235,74 @@ export async function deleteCounterpartyEvent(id: string) {
 
   if (error) {
     console.error('Erro ao remover devedor/credor:', error)
+    return false
+  }
+  return true
+}
+
+// ============ CONFIRMED PAYMENTS CLIENTS ============
+
+export async function getConfirmedPaymentClients() {
+  const { data, error } = await supabase
+    .from('confirmed_payment_clients')
+    .select('*')
+    .order('client_number', { ascending: true })
+
+  if (error) {
+    console.error('Erro ao buscar clientes de pagamentos confirmados:', error)
+    return []
+  }
+  return data || []
+}
+
+export async function addConfirmedPaymentClient(
+  client: Omit<ConfirmedPaymentClient, 'id' | 'created_at' | 'updated_at'>,
+) {
+  const { data, error } = await supabase
+    .from('confirmed_payment_clients')
+    .insert([
+      {
+        ...client,
+        updated_at: new Date().toISOString(),
+      },
+    ])
+    .select()
+
+  if (error) {
+    console.error('Erro ao cadastrar cliente de pagamentos confirmados:', error)
+    return null
+  }
+  return data?.[0] || null
+}
+
+export async function updateConfirmedPaymentClient(
+  id: string,
+  updates: Partial<Omit<ConfirmedPaymentClient, 'id' | 'created_at'>>,
+) {
+  const { data, error } = await supabase
+    .from('confirmed_payment_clients')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+
+  if (error) {
+    console.error('Erro ao atualizar cliente de pagamentos confirmados:', error)
+    return null
+  }
+  return data?.[0] || null
+}
+
+export async function deleteConfirmedPaymentClient(id: string) {
+  const { error } = await supabase
+    .from('confirmed_payment_clients')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Erro ao remover cliente de pagamentos confirmados:', error)
     return false
   }
   return true

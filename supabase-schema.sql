@@ -40,6 +40,18 @@ CREATE TABLE counterparty_events (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Tabela de clientes para controle de pagamentos confirmados
+CREATE TABLE confirmed_payment_clients (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_number INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  amount NUMERIC(12, 2) NOT NULL DEFAULT 70.00,
+  paid BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(client_number)
+);
+
 -- Índices para performance
 CREATE INDEX movements_date_idx ON movements(date DESC);
 CREATE INDEX movements_type_idx ON movements(type);
@@ -48,12 +60,15 @@ CREATE INDEX allocations_expense_idx ON movement_allocations(expense_id);
 CREATE INDEX allocations_movement_idx ON movement_allocations(movement_id);
 CREATE INDEX counterparty_events_type_idx ON counterparty_events(type);
 CREATE INDEX counterparty_events_created_at_idx ON counterparty_events(created_at DESC);
+CREATE INDEX confirmed_payment_clients_paid_idx ON confirmed_payment_clients(paid);
+CREATE INDEX confirmed_payment_clients_number_idx ON confirmed_payment_clients(client_number);
 
 -- Ativar RLS (Row Level Security)
 ALTER TABLE movements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movement_allocations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE counterparty_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE confirmed_payment_clients ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS (permitir acesso a todos por enquanto, você pode configurar melhor depois)
 CREATE POLICY "Allow all access to movements" ON movements
@@ -66,4 +81,7 @@ CREATE POLICY "Allow all access to allocations" ON movement_allocations
   FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all access to counterparty_events" ON counterparty_events
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all access to confirmed_payment_clients" ON confirmed_payment_clients
   FOR ALL USING (true) WITH CHECK (true);

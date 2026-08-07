@@ -78,6 +78,17 @@ expense_id: UUID (referencia expenses)
 created_at: timestamp
 ```
 
+### `confirmed_payment_clients` (Pagamentos Confirmados)
+```
+id: UUID (primária)
+client_number: inteiro (ex: 10)
+name: texto (ex: "Sidão")
+amount: número decimal (padrão 70.00)
+paid: boolean (true=confirmado, false=pendente)
+created_at: timestamp
+updated_at: timestamp
+```
+
 ## 🔒 Segurança (Próximos Passos)
 
 Por enquanto, as políticas RLS permitem acesso a todos. Para produção:

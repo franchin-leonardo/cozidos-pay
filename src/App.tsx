@@ -34,9 +34,13 @@ import { useAuthContext } from './contexts/useAuthContext'
 import { useMovements } from './hooks/useMovements'
 import { useExpenses } from './hooks/useExpenses'
 import {
+  addConfirmedPaymentClient,
   addCounterpartyEvent,
+  deleteConfirmedPaymentClient,
   deleteCounterpartyEvent,
+  getConfirmedPaymentClients,
   getCounterpartyEvents,
+  updateConfirmedPaymentClient,
 } from './lib/supabaseService'
 import logo from './assets/logo.png'
 
@@ -73,6 +77,16 @@ type SplitPartDraft = {
   description: string
   amount: string
 }
+
+type ConfirmedPaymentClient = {
+  id: string
+  number: number
+  name: string
+  amount: number
+  paid: boolean
+}
+
+const DEFAULT_PAYMENT_AMOUNT = 70
 
 const initialMovements: Movement[] = [
   {
@@ -205,6 +219,16 @@ function getCurrentLocalDateTime() {
   return { date, time }
 }
 
+function mapConfirmedPaymentClient(entry: any): ConfirmedPaymentClient {
+  return {
+    id: entry.id,
+    number: Number(entry.client_number),
+    name: entry.name,
+    amount: Number(entry.amount),
+    paid: Boolean(entry.paid),
+  }
+}
+
 function App() {
   const { isGuest, isAdmin } = useAuthContext()
   const {
@@ -235,7 +259,7 @@ function App() {
   const [manualMovementMessage, setManualMovementMessage] = useState('')
 
   const [planningView, setPlanningView] = useState<
-    'planejamento' | 'devedores_credores'
+    'planejamento' | 'devedores_credores' | 'pagamentos_confirmados'
   >('planejamento')
   const [isPlanningCollapsed, setIsPlanningCollapsed] = useState(true)
   const [isStatementCollapsed, setIsStatementCollapsed] = useState(false)
@@ -252,6 +276,20 @@ function App() {
   const [counterpartyEntries, setCounterpartyEntries] = useState<
     CounterpartyEntry[]
   >([])
+  const [paymentClientNumber, setPaymentClientNumber] = useState('')
+  const [paymentClientName, setPaymentClientName] = useState('')
+  const [paymentSearchTerm, setPaymentSearchTerm] = useState('')
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<
+    'todos' | 'confirmados' | 'pendentes'
+  >('todos')
+  const [confirmedPayments, setConfirmedPayments] = useState<
+    ConfirmedPaymentClient[]
+  >([])
+  const [editingPaymentClientId, setEditingPaymentClientId] = useState<string | null>(null)
+  const [editingPaymentClientNumber, setEditingPaymentClientNumber] = useState('')
+  const [editingPaymentClientName, setEditingPaymentClientName] = useState('')
+  const [paymentClientMessage, setPaymentClientMessage] = useState('')
+  const [isSubmittingPaymentClient, setIsSubmittingPaymentClient] = useState(false)
 
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null)
   const [editingExpenseName, setEditingExpenseName] = useState('')
@@ -259,6 +297,8 @@ function App() {
   const [selectedMovementByExpenseId, setSelectedMovementByExpenseId] = useState<
     Record<string, string>
   >({})
+  const [expandedAllocatedMovementsByExpenseId, setExpandedAllocatedMovementsByExpenseId] =
+    useState<Record<string, boolean>>({})
   const [draggedMovementId, setDraggedMovementId] = useState<string | null>(null)
   const [dragOverExpenseId, setDragOverExpenseId] = useState<string | null>(null)
   const [isImportingMovements, setIsImportingMovements] = useState(false)
@@ -327,6 +367,27 @@ function App() {
 
   const visibleExpenses = expensesWithProgress
 
+  const paidClientsCount = confirmedPayments.filter((client) => client.paid).length
+  const pendingClientsCount = confirmedPayments.length - paidClientsCount
+  const paidClientsTotal = confirmedPayments
+    .filter((client) => client.paid)
+    .reduce((sum, client) => sum + client.amount, 0)
+  const pendingClientsTotal = confirmedPayments
+    .filter((client) => !client.paid)
+    .reduce((sum, client) => sum + client.amount, 0)
+  const expectedClientsTotal = confirmedPayments.reduce((sum, client) => sum + client.amount, 0)
+  const filteredConfirmedPayments = confirmedPayments.filter((client) => {
+    const matchesName = client.name
+      .toLowerCase()
+      .includes(paymentSearchTerm.trim().toLowerCase())
+    const matchesStatus =
+      paymentStatusFilter === 'todos' ||
+      (paymentStatusFilter === 'confirmados' && client.paid) ||
+      (paymentStatusFilter === 'pendentes' && !client.paid)
+
+    return matchesName && matchesStatus
+  })
+
   useEffect(() => {
     let isMounted = true
 
@@ -346,7 +407,18 @@ function App() {
       setCounterpartyEntries(mapped)
     }
 
+    const loadConfirmedPaymentClients = async () => {
+      const data = await getConfirmedPaymentClients()
+      if (!isMounted) {
+        return
+      }
+
+      const mapped = data.map((entry: any) => mapConfirmedPaymentClient(entry))
+      setConfirmedPayments(mapped)
+    }
+
     void loadCounterpartyEvents()
+    void loadConfirmedPaymentClients()
 
     return () => {
       isMounted = false
@@ -531,10 +603,189 @@ function App() {
       const { [expenseId]: _removedSelection, ...nextSelection } = currentSelection
       return nextSelection
     })
+    setExpandedAllocatedMovementsByExpenseId((currentExpanded) => {
+      const { [expenseId]: _removedExpanded, ...nextExpanded } = currentExpanded
+      return nextExpanded
+    })
 
     if (editingExpenseId === expenseId) {
       cancelEditingExpense()
     }
+  }
+
+  function toggleAllocatedMovements(expenseId: string) {
+    setExpandedAllocatedMovementsByExpenseId((currentExpanded) => ({
+      ...currentExpanded,
+      [expenseId]: !(currentExpanded[expenseId] ?? false),
+    }))
+  }
+
+  function cancelEditingPaymentClient() {
+    setEditingPaymentClientId(null)
+    setEditingPaymentClientNumber('')
+    setEditingPaymentClientName('')
+  }
+
+  async function addConfirmedPaymentClientEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (isGuest || isSubmittingPaymentClient) {
+      return
+    }
+
+    const parsedNumber = Number(paymentClientNumber)
+    if (!Number.isInteger(parsedNumber) || parsedNumber <= 0 || !paymentClientName.trim()) {
+      setPaymentClientMessage('Informe número inteiro e nome do cliente.')
+      return
+    }
+
+    setIsSubmittingPaymentClient(true)
+    setPaymentClientMessage('')
+
+    try {
+      const inserted = await addConfirmedPaymentClient({
+        client_number: parsedNumber,
+        name: paymentClientName.trim(),
+        amount: DEFAULT_PAYMENT_AMOUNT,
+        paid: false,
+      })
+
+      if (!inserted) {
+        setPaymentClientMessage('Não foi possível cadastrar o cliente.')
+        return
+      }
+
+      const mapped = mapConfirmedPaymentClient(inserted)
+      setConfirmedPayments((currentPayments) =>
+        [...currentPayments, mapped].sort((left, right) => left.number - right.number),
+      )
+      setPaymentClientNumber('')
+      setPaymentClientName('')
+      setPaymentClientMessage('Cliente cadastrado com sucesso.')
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível cadastrar o cliente.'
+      setPaymentClientMessage(message)
+    } finally {
+      setIsSubmittingPaymentClient(false)
+    }
+  }
+
+  function startEditingPaymentClient(client: ConfirmedPaymentClient) {
+    if (isGuest) {
+      return
+    }
+
+    setEditingPaymentClientId(client.id)
+    setEditingPaymentClientNumber(String(client.number))
+    setEditingPaymentClientName(client.name)
+    setPaymentClientMessage('')
+  }
+
+  async function saveConfirmedPaymentClientEdit(clientId: string) {
+    if (isGuest || isSubmittingPaymentClient) {
+      return
+    }
+
+    const parsedNumber = Number(editingPaymentClientNumber)
+    if (!Number.isInteger(parsedNumber) || parsedNumber <= 0 || !editingPaymentClientName.trim()) {
+      setPaymentClientMessage('Número e nome válidos são obrigatórios para salvar.')
+      return
+    }
+
+    setIsSubmittingPaymentClient(true)
+    setPaymentClientMessage('')
+
+    try {
+      const updated = await updateConfirmedPaymentClient(clientId, {
+        client_number: parsedNumber,
+        name: editingPaymentClientName.trim(),
+      })
+
+      if (!updated) {
+        setPaymentClientMessage('Não foi possível atualizar o cliente.')
+        return
+      }
+
+      const mapped = mapConfirmedPaymentClient(updated)
+      setConfirmedPayments((currentPayments) =>
+        currentPayments
+          .map((client) => (client.id === clientId ? mapped : client))
+          .sort((left, right) => left.number - right.number),
+      )
+      setPaymentClientMessage('Cliente atualizado com sucesso.')
+      cancelEditingPaymentClient()
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível atualizar o cliente.'
+      setPaymentClientMessage(message)
+    } finally {
+      setIsSubmittingPaymentClient(false)
+    }
+  }
+
+  async function removeConfirmedPaymentClientEntry(clientId: string) {
+    if (isGuest || isSubmittingPaymentClient) {
+      return
+    }
+
+    setIsSubmittingPaymentClient(true)
+    setPaymentClientMessage('')
+
+    try {
+      const success = await deleteConfirmedPaymentClient(clientId)
+      if (!success) {
+        setPaymentClientMessage('Não foi possível remover o cliente.')
+        return
+      }
+
+      setConfirmedPayments((currentPayments) =>
+        currentPayments.filter((client) => client.id !== clientId),
+      )
+
+      if (editingPaymentClientId === clientId) {
+        cancelEditingPaymentClient()
+      }
+
+      setPaymentClientMessage('Cliente removido com sucesso.')
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível remover o cliente.'
+      setPaymentClientMessage(message)
+    } finally {
+      setIsSubmittingPaymentClient(false)
+    }
+  }
+
+  async function toggleConfirmedPaymentStatus(clientId: string) {
+    if (isGuest) {
+      return
+    }
+
+    const targetClient = confirmedPayments.find((client) => client.id === clientId)
+    if (!targetClient) {
+      return
+    }
+
+    const updated = await updateConfirmedPaymentClient(clientId, {
+      paid: !targetClient.paid,
+    })
+
+    if (!updated) {
+      setPaymentClientMessage('Não foi possível atualizar o status do pagamento.')
+      return
+    }
+
+    const mapped = mapConfirmedPaymentClient(updated)
+    setConfirmedPayments((currentPayments) =>
+      currentPayments.map((client) => (client.id === clientId ? mapped : client)),
+    )
   }
 
   async function removeMovementEntry(movement: Movement) {
@@ -1012,15 +1263,28 @@ function App() {
                 >
                   Devedores e credores
                 </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={planningView === 'pagamentos_confirmados'}
+                  className={planningView === 'pagamentos_confirmados' ? 'active' : ''}
+                  onClick={() => setPlanningView('pagamentos_confirmados')}
+                >
+                  Pagamentos confirmados
+                </button>
               </div>
 
               {planningView === 'planejamento' ? (
                 <>
                   <h2>Despesas</h2>
                 </>
+              ) : planningView === 'devedores_credores' ? (
+                <>
+                  <h2>Devedores e credores</h2>
+                </>
               ) : (
                 <>
-                  <h2>Devedores e credores</h2>                  
+                  <h2>Pagamentos confirmados</h2>
                 </>
               )}
             </div>
@@ -1267,29 +1531,59 @@ function App() {
                     </button>
                   </div>}
 
-                  <div className="assigned-movements">
-                    {expense.assignedMovements.length > 0 ? (
-                      expense.assignedMovements.map((movement) => (
-                        <div className="assigned-movement" key={movement.id}>
-                          <span>
-                            {movement.name} · {formatCurrency(movement.amount, movement.type)}
-                          </span>
-                          {!isGuest && (
-                            <button
-                              className="icon-action muted"
-                              type="button"
-                              aria-label={`Remover ${movement.name} de ${expense.name}`}
-                              onClick={() =>
-                                removeMovementFromExpense(expense.id, movement.id)
-                              }
-                            >
-                              <X size={15} aria-hidden="true" />
-                            </button>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <span>Solte uma entrada ou saída aqui</span>
+                  <div className="assigned-movements-wrapper">
+                    <div className="assigned-movements-header">
+                      <span>
+                        {expense.assignedMovements.length} movimentaç
+                        {expense.assignedMovements.length === 1 ? 'ão alocada' : 'ões alocadas'}
+                      </span>
+                      <button
+                        className="ghost-action assigned-movements-toggle"
+                        type="button"
+                        aria-expanded={expandedAllocatedMovementsByExpenseId[expense.id] ?? false}
+                        aria-controls={`assigned-movements-${expense.id}`}
+                        onClick={() => toggleAllocatedMovements(expense.id)}
+                      >
+                        {expandedAllocatedMovementsByExpenseId[expense.id] ?? false ? (
+                          <>
+                            <ChevronUp size={15} aria-hidden="true" />
+                            Minimizar
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown size={15} aria-hidden="true" />
+                            Expandir
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {(expandedAllocatedMovementsByExpenseId[expense.id] ?? false) && (
+                      <div className="assigned-movements" id={`assigned-movements-${expense.id}`}>
+                        {expense.assignedMovements.length > 0 ? (
+                          expense.assignedMovements.map((movement) => (
+                            <div className="assigned-movement" key={movement.id}>
+                              <span>
+                                {movement.name} · {formatCurrency(movement.amount, movement.type)}
+                              </span>
+                              {!isGuest && (
+                                <button
+                                  className="icon-action muted"
+                                  type="button"
+                                  aria-label={`Remover ${movement.name} de ${expense.name}`}
+                                  onClick={() =>
+                                    removeMovementFromExpense(expense.id, movement.id)
+                                  }
+                                >
+                                  <X size={15} aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <span>Solte uma entrada ou saída aqui</span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </article>
@@ -1302,7 +1596,7 @@ function App() {
                 </div>
               )}
             </div>
-          ) : (
+          ) : planningView === 'devedores_credores' ? (
             <div className="counterparty-list">
               {counterpartyEntries.map((entry) => (
                 <article
@@ -1340,6 +1634,221 @@ function App() {
                   <strong>Nenhum cliente cadastrado</strong>
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="confirmed-payments-wrapper">
+              <section className="payments-summary-grid" aria-label="Resumo dos pagamentos">
+                <article className="summary-panel saldo">
+                  <span>Total previsto</span>
+                  <strong>{currencyFormatter.format(expectedClientsTotal)}</strong>
+                </article>
+                <article className="summary-panel entrada">
+                  <span>Confirmados ({paidClientsCount})</span>
+                  <strong>{currencyFormatter.format(paidClientsTotal)}</strong>
+                </article>
+                <article className="summary-panel saida">
+                  <span>Pendentes ({pendingClientsCount})</span>
+                  <strong>{currencyFormatter.format(pendingClientsTotal)}</strong>
+                </article>
+              </section>
+
+              {!isGuest && (
+                <form
+                  className="payments-client-form"
+                  onSubmit={addConfirmedPaymentClientEntry}
+                >
+                  <label className="compact-field">
+                    <span>Número</span>
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="Ex.: 10"
+                      value={paymentClientNumber}
+                      onChange={(event) => setPaymentClientNumber(event.target.value)}
+                      disabled={isSubmittingPaymentClient}
+                    />
+                  </label>
+                  <label className="compact-field">
+                    <span>Nome do cliente</span>
+                    <input
+                      type="text"
+                      placeholder="Ex.: João"
+                      value={paymentClientName}
+                      onChange={(event) => setPaymentClientName(event.target.value)}
+                      disabled={isSubmittingPaymentClient}
+                    />
+                  </label>
+                  <button
+                    className="primary-action expense-submit"
+                    type="submit"
+                    disabled={isSubmittingPaymentClient}
+                  >
+                    <Plus size={18} aria-hidden="true" />
+                    Cadastrar cliente
+                  </button>
+                </form>
+              )}
+
+              {paymentClientMessage && (
+                <p className="manual-movement-message">{paymentClientMessage}</p>
+              )}
+
+              <label className="field search-field payments-search-field">
+                <span>Buscar cliente</span>
+                <div>
+                  <Search size={18} aria-hidden="true" />
+                  <input
+                    type="search"
+                    placeholder="Digite um nome"
+                    value={paymentSearchTerm}
+                    onChange={(event) => setPaymentSearchTerm(event.target.value)}
+                  />
+                </div>
+              </label>
+
+              <div className="payments-status-filter" aria-label="Filtro por status de pagamento">
+                <button
+                  type="button"
+                  className={paymentStatusFilter === 'todos' ? 'active' : ''}
+                  onClick={() => setPaymentStatusFilter('todos')}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  className={paymentStatusFilter === 'confirmados' ? 'active' : ''}
+                  onClick={() => setPaymentStatusFilter('confirmados')}
+                >
+                  Confirmados
+                </button>
+                <button
+                  type="button"
+                  className={paymentStatusFilter === 'pendentes' ? 'active' : ''}
+                  onClick={() => setPaymentStatusFilter('pendentes')}
+                >
+                  Pendentes
+                </button>
+              </div>
+
+              <div className="confirmed-payments-list">
+                {filteredConfirmedPayments.map((client) => (
+                  <article
+                    key={client.id}
+                    className={`confirmed-payment-card ${client.paid ? 'paid' : 'pending'}`}
+                  >
+                    <div className="confirmed-payment-card-top">
+                      <div>
+                        <strong>
+                          {client.number} - {client.name}
+                        </strong>
+                        <span>{client.paid ? 'Pagamento confirmado' : 'Pagamento pendente'}</span>
+                      </div>
+
+                      <div className="confirmed-payment-side">
+                        <strong className="confirmed-payment-value">
+                          {currencyFormatter.format(client.amount)}
+                        </strong>
+
+                        {!isGuest && (
+                          <div className="confirmed-payment-actions">
+                            <button
+                              className="icon-action"
+                              type="button"
+                              aria-label={`Editar ${client.name}`}
+                              onClick={() => startEditingPaymentClient(client)}
+                              disabled={isSubmittingPaymentClient}
+                            >
+                              <Pencil size={16} aria-hidden="true" />
+                            </button>
+                            <button
+                              className="icon-action danger"
+                              type="button"
+                              aria-label={`Remover ${client.name}`}
+                              onClick={() => removeConfirmedPaymentClientEntry(client.id)}
+                              disabled={isSubmittingPaymentClient}
+                            >
+                              <Trash2 size={16} aria-hidden="true" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {editingPaymentClientId === client.id ? (
+                      <div className="confirmed-payment-edit-form">
+                        <label className="compact-field">
+                          <span>Número</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={editingPaymentClientNumber}
+                            onChange={(event) =>
+                              setEditingPaymentClientNumber(event.target.value)
+                            }
+                            disabled={isSubmittingPaymentClient}
+                          />
+                        </label>
+                        <label className="compact-field">
+                          <span>Nome</span>
+                          <input
+                            type="text"
+                            value={editingPaymentClientName}
+                            onChange={(event) =>
+                              setEditingPaymentClientName(event.target.value)
+                            }
+                            disabled={isSubmittingPaymentClient}
+                          />
+                        </label>
+                        <div className="confirmed-payment-edit-actions">
+                          <button
+                            className="ghost-action"
+                            type="button"
+                            onClick={cancelEditingPaymentClient}
+                            disabled={isSubmittingPaymentClient}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            className="primary-action"
+                            type="button"
+                            onClick={() => saveConfirmedPaymentClientEdit(client.id)}
+                            disabled={isSubmittingPaymentClient}
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      !isGuest && (
+                        <button
+                          type="button"
+                          className={`toggle-payment-button ${client.paid ? 'paid' : 'pending'}`}
+                          onClick={() => toggleConfirmedPaymentStatus(client.id)}
+                        >
+                          {client.paid ? (
+                            <>
+                              <Check size={16} aria-hidden="true" />
+                              Marcar como pendente
+                            </>
+                          ) : (
+                            <>
+                              <Check size={16} aria-hidden="true" />
+                              Confirmar pagamento
+                            </>
+                          )}
+                        </button>
+                      )
+                    )}
+                  </article>
+                ))}
+
+                {filteredConfirmedPayments.length === 0 && (
+                  <div className="empty-state">
+                    <Search size={24} aria-hidden="true" />
+                    <strong>Nenhum cliente encontrado</strong>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           </div>

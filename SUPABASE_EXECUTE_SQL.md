@@ -72,6 +72,17 @@ CREATE POLICY "Allow all access to allocations" ON movement_allocations
 
 4. **Espere** completar (deve dizer "Success" em verde)
 
+## ➕ Migração da aba "Pagamentos confirmados"
+
+Depois do schema base, rode também o script incremental abaixo no SQL Editor:
+
+```sql
+-- arquivo: supabase-add-confirmed-payment-clients.sql
+```
+
+Esse script cria a tabela `confirmed_payment_clients`, configura índice/RLS/policy
+e popula a lista inicial de clientes com valor de R$ 70 por cliente.
+
 ## 🧪 Testar Conexão
 
 Depois de executar o SQL, reinicie o servidor:

@@ -297,7 +297,7 @@ input:focus-visible {
 
 .planning-view-tabs {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 12px 0;
 }
@@ -459,6 +459,163 @@ input:focus-visible {
 .counterparty-card.credor .counterparty-card-top span,
 .counterparty-card.credor .counterparty-value {
   color: #1f8b54;
+}
+
+.confirmed-payments-wrapper {
+  display: grid;
+  gap: 18px;
+}
+
+.payments-client-form {
+  display: grid;
+  grid-template-columns: 150px minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.payments-search-field {
+  max-width: 380px;
+}
+
+.payments-status-filter {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, 420px);
+}
+
+.payments-status-filter button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-strong);
+  background: #f4f7f5;
+  font-weight: 700;
+}
+
+.payments-status-filter button.active {
+  border-color: rgba(28, 126, 78, 0.22);
+  color: #123b25;
+  background: var(--green-button);
+}
+
+.payments-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.confirmed-payments-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 14px;
+}
+
+.confirmed-payment-card {
+  display: grid;
+  gap: 14px;
+  min-height: 142px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+.confirmed-payment-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.confirmed-payment-card-top strong {
+  display: block;
+  color: var(--text-strong);
+}
+
+.confirmed-payment-card-top span {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirmed-payment-value {
+  font-size: 23px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.confirmed-payment-side {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.confirmed-payment-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.confirmed-payment-edit-form {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.confirmed-payment-edit-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirmed-payment-card.pending {
+  border-color: #efb4aa;
+  background: linear-gradient(180deg, #fff1ee 0%, #ffffff 100%);
+}
+
+.confirmed-payment-card.pending .confirmed-payment-value {
+  color: #b44232;
+}
+
+.confirmed-payment-card.paid {
+  border-color: #8bd6a6;
+  background: linear-gradient(180deg, #e9fff1 0%, #ffffff 100%);
+}
+
+.confirmed-payment-card.paid .confirmed-payment-value,
+.confirmed-payment-card.paid .confirmed-payment-card-top span {
+  color: #1f8b54;
+}
+
+.toggle-payment-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.toggle-payment-button.pending {
+  color: #ffffff;
+  background: #c94e3d;
+}
+
+.toggle-payment-button.pending:hover {
+  background: #b44232;
+}
+
+.toggle-payment-button.paid {
+  color: #123b25;
+  background: var(--green-button);
+}
+
+.toggle-payment-button.paid:hover {
+  background: #9ce6b6;
 }
 
 .expense-card {
@@ -635,6 +792,33 @@ input:focus-visible {
   align-content: start;
   min-height: 52px;
   padding-top: 2px;
+}
+
+.assigned-movements-wrapper {
+  display: grid;
+  gap: 4px;
+}
+
+.assigned-movements-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.assigned-movements-header > span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.assigned-movements-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  min-height: 30px;
+  border-radius: 7px;
+  font-size: 0.78rem;
 }
 
 .manual-assignment {
@@ -1114,6 +1298,26 @@ input:focus-visible {
   }
 
   .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payments-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payments-client-form {
+    grid-template-columns: 1fr;
+  }
+
+  .payments-search-field {
+    max-width: none;
+  }
+
+  .payments-status-filter {
+    width: 100%;
+  }
+
+  .confirmed-payment-edit-form {
     grid-template-columns: 1fr;
   }
 
