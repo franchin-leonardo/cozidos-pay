@@ -237,6 +237,33 @@ function getTodayStart() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
 }
 
+async function upsertImportedMessage(
+  supabase,
+  {
+    gmailMessageId,
+    movementId = null,
+    status,
+  },
+) {
+  const { error } = await supabase
+    .from('import_pix_messages')
+    .upsert(
+      [
+        {
+          gmail_message_id: gmailMessageId,
+          movement_id: movementId,
+          status,
+          processed_at: new Date().toISOString(),
+        },
+      ],
+      { onConflict: 'gmail_message_id' },
+    )
+
+  if (error) {
+    throw error
+  }
+}
+
 async function getMessage(gmail, id) {
   const { data } = await gmail.users.messages.get({
     userId: 'me',
@@ -304,9 +331,43 @@ export async function runGmailPixImport(options = {}) {
     let skippedNoAmount = 0
     let skippedDuplicate = 0
     let skippedBeforeToday = 0
+    let skippedAlreadyProcessed = 0
     const todayStart = getTodayStart()
 
+    const processedMessageIds = new Set()
+
+    if (shouldCheckDuplicates && messageRefs.length > 0) {
+      const { data: alreadyProcessedData, error: alreadyProcessedError } = await supabase
+        .from('import_pix_messages')
+        .select('gmail_message_id')
+        .in('gmail_message_id', messageRefs.map((messageRef) => messageRef.id))
+
+      if (alreadyProcessedError) {
+        const message = String(alreadyProcessedError.message || '').toLowerCase()
+        if (message.includes('import_pix_messages') && message.includes('does not exist')) {
+          throw new Error(
+            'Tabela import_pix_messages não encontrada. Execute a migração supabase-add-import-pix-messages.sql no Supabase.',
+          )
+        }
+
+        throw alreadyProcessedError
+      }
+
+      for (const row of alreadyProcessedData || []) {
+        if (row?.gmail_message_id) {
+          processedMessageIds.add(row.gmail_message_id)
+        }
+      }
+    }
+
     for (const ref of messageRefs) {
+      if (processedMessageIds.has(ref.id)) {
+        skipped += 1
+        skippedDuplicate += 1
+        skippedAlreadyProcessed += 1
+        continue
+      }
+
       const message = await getMessage(gmail, ref.id)
       const textParts = collectTextParts(message.payload)
       const messageText = `${message.snippet || ''}\n${textParts.join('\n')}`
@@ -353,8 +414,17 @@ export async function runGmailPixImport(options = {}) {
         }
 
         if (existing && existing.length > 0) {
+          if (!args.dryRun) {
+            await upsertImportedMessage(supabase, {
+              gmailMessageId: ref.id,
+              movementId: existing[0].id,
+              status: 'duplicate_existing_movement',
+            })
+          }
+
           skipped += 1
           skippedDuplicate += 1
+          processedMessageIds.add(ref.id)
           continue
         }
       }
@@ -365,10 +435,24 @@ export async function runGmailPixImport(options = {}) {
         continue
       }
 
-      const { error: insertError } = await supabase.from('movements').insert([movement])
+      const { data: insertedRows, error: insertError } = await supabase
+        .from('movements')
+        .insert([movement])
+        .select('id')
+        .limit(1)
       if (insertError) {
         throw insertError
       }
+
+      const insertedMovementId = insertedRows?.[0]?.id || null
+
+      await upsertImportedMessage(supabase, {
+        gmailMessageId: ref.id,
+        movementId: insertedMovementId,
+        status: 'imported',
+      })
+
+      processedMessageIds.add(ref.id)
 
       inserted += 1
     }
@@ -378,6 +462,7 @@ export async function runGmailPixImport(options = {}) {
     console.log(`Movimentacoes ignoradas: ${skipped}`)
     console.log(`Ignoradas por valor nao encontrado: ${skippedNoAmount}`)
     console.log(`Ignoradas por duplicidade: ${skippedDuplicate}`)
+    console.log(`Ignoradas por mensagem ja processada: ${skippedAlreadyProcessed}`)
     console.log(`Ignoradas por serem anteriores a hoje: ${skippedBeforeToday}`)
 
     return {
@@ -386,6 +471,7 @@ export async function runGmailPixImport(options = {}) {
       skipped,
       skippedNoAmount,
       skippedDuplicate,
+      skippedAlreadyProcessed,
       skippedBeforeToday,
       dryRun: args.dryRun,
     }

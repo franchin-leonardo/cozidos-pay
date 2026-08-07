@@ -83,6 +83,18 @@ Depois do schema base, rode também o script incremental abaixo no SQL Editor:
 Esse script cria a tabela `confirmed_payment_clients`, configura índice/RLS/policy
 e popula a lista inicial de clientes com valor de R$ 70 por cliente.
 
+## 🛡️ Migração anti-reimport após split
+
+Rode também este script incremental para evitar reimportar a movimentação original
+de um email já processado:
+
+```sql
+-- arquivo: supabase-add-import-pix-messages.sql
+```
+
+Esse script cria a tabela `import_pix_messages`, que guarda o `gmail_message_id`
+processado e impede reimportação mesmo após dividir/excluir movimentações.
+
 ## 🧪 Testar Conexão
 
 Depois de executar o SQL, reinicie o servidor:

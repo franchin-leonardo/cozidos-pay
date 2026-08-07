@@ -52,6 +52,16 @@ CREATE TABLE confirmed_payment_clients (
   UNIQUE(client_number)
 );
 
+-- Tabela de controle de mensagens Gmail processadas no import de PIX
+CREATE TABLE import_pix_messages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  gmail_message_id TEXT NOT NULL UNIQUE,
+  movement_id UUID REFERENCES movements(id) ON DELETE SET NULL,
+  status TEXT NOT NULL CHECK (status IN ('imported', 'duplicate_existing_movement')),
+  processed_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Índices para performance
 CREATE INDEX movements_date_idx ON movements(date DESC);
 CREATE INDEX movements_type_idx ON movements(type);
@@ -62,6 +72,8 @@ CREATE INDEX counterparty_events_type_idx ON counterparty_events(type);
 CREATE INDEX counterparty_events_created_at_idx ON counterparty_events(created_at DESC);
 CREATE INDEX confirmed_payment_clients_paid_idx ON confirmed_payment_clients(paid);
 CREATE INDEX confirmed_payment_clients_number_idx ON confirmed_payment_clients(client_number);
+CREATE INDEX import_pix_messages_processed_at_idx ON import_pix_messages(processed_at DESC);
+CREATE INDEX import_pix_messages_status_idx ON import_pix_messages(status);
 
 -- Ativar RLS (Row Level Security)
 ALTER TABLE movements ENABLE ROW LEVEL SECURITY;
@@ -69,6 +81,7 @@ ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movement_allocations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE counterparty_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE confirmed_payment_clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE import_pix_messages ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS (permitir acesso a todos por enquanto, você pode configurar melhor depois)
 CREATE POLICY "Allow all access to movements" ON movements
@@ -84,4 +97,7 @@ CREATE POLICY "Allow all access to counterparty_events" ON counterparty_events
   FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all access to confirmed_payment_clients" ON confirmed_payment_clients
+  FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all access to import_pix_messages" ON import_pix_messages
   FOR ALL USING (true) WITH CHECK (true);
